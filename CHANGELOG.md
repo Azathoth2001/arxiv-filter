@@ -210,6 +210,61 @@ POST 等价性、大小写、中文关键词、特殊字面量、官网 ±5% 对
 - 新增 `tests/live/test_live_arxiv.py`（默认跳过，需 `ARXIV_LIVE_TESTS=1`），
   把这次验证固化成可复跑的测试，避免下次再凭手工命令复现。
 
+### 阶段 2 · SQLite 存储（T2.1–T2.3）
+
+全程离线；657 个测试通过，分支覆盖率 95%。本阶段**未访问 arXiv**
+（406 风险的冷却期）。
+
+**T2.1 连接与迁移**（`storage/database.py`、`storage/migrations/001_init.sql`）
+- 六张表：`schema_meta` / `papers` / `query_cache` / `query_results` /
+  `query_history` / `read_state`，四个索引；时间一律 TEXT + RFC 3339 `Z`。
+- 启动 PRAGMA：`journal_mode=WAL`、`foreign_keys=ON`、`busy_timeout=5000`。
+- **单连接 + 进程内 `asyncio.Lock`** 串行化；对外暴露 `read(fn)` / `write(fn)`
+  而不是 async 事务上下文——这样事务边界完全在工作线程内，
+  **不会跨 await 持有事务**（方案 §4.5 的硬要求）。
+- 迁移前 `sqlite3.Connection.backup()` 写时间戳备份并**用 `PRAGMA integrity_check`
+  验证可重新打开**；每个 migration 一个事务；成功后才更新 `schema_meta`；
+  保留最近 3 个已验证备份。
+- 失败时回滚、保留原库、**以只读模式启动**（`open()` 不抛异常，
+  失败详情走 `migration_error` 属性）——这是方案 §8.7「保留原库并只读启动」的落地，
+  用户仍然能看到已有数据。
+- 数据库版本比程序新时拒绝写入，中文提示「比程序支持的…新」。
+
+两处容易踩的坑，都已在代码里写明原因：
+
+1. **不能用 `executescript`**：它在执行前会隐式 `COMMIT` 掉外层事务，
+   迁移失败就无法回滚——而那正是要防的事。改为用标准库
+   `sqlite3.complete_statement` 逐行识别语句边界，再逐条 `execute`。
+2. **迁移失败后不能关连接**：关掉的话「只读启动」就成了空话，
+   用户连历史记录都看不到。
+
+**T2.2 查询缓存**（`storage/cache_repo.py`）
+- `get_fresh` / `get_stale` / `get_any` / `put_complete` / `put_partial` /
+  `prune` / `purge_expired` / `clear`。
+- 产品默认值：fresh TTL 6 小时、stale 保留 30 天、上限 500 MiB（按
+  `last_accessed_at` LRU 淘汰）。
+- **不完整的结果永不命中**：`put_partial` 落盘时标 `complete=0`，
+  保留下来仅供诊断，`get_fresh`/`get_stale`/`get_any` 一律不返回它。
+- **绝不清理 `read_state`**；清理孤儿论文时也会跳过 `read_state` 引用到的记录，
+  否则「已读列表」会只剩一串没有标题的 ID。
+- 单条坏 JSON 只跳过那一条，不让整份缓存失效。
+
+**T2.3 已读状态与历史**（`storage/read_repo.py`、`storage/history_repo.py`）
+- `mark_seen` 用 `ON CONFLICT DO UPDATE` 只推进 `last_seen_at` / 收敛 `first_seen_at`，
+  **结构上不可能覆盖 `read_at`**——决策 D2 的核心不变式。
+- 撤销已读只置 `read_at = NULL`，**不删行**，`seen_at` 保留。
+- 导出/导入按 `canonical_id` 合并：`first_seen=min`、`last_seen=max`、
+  `read_at=max(non-null)`；导入容错跳过坏条目、纠正逆序时间戳、
+  校验 `schema_version`。
+- 历史保留「500 条或 90 天，先到者为准」；`id` 用 **UUIDv7**（按时间单调递增），
+  因此可以直接当分页游标。
+- 新增 `identifiers.py`：RFC 9562 的最小 UUIDv7 实现（Python 3.12 标准库还没有
+  `uuid7`），以及启动令牌用的 `random_token`。
+
+**顺带清理**：删掉了三个写了但从未被调用的 helper
+（`rows_to_dicts` / `copy_to` / `serialise_papers` / `placeholders`）——
+它们的「测试」只是自己测自己，属于投机性死代码。
+
 ### 环境说明
 
 - 开发环境使用 miniforge 的 `arxiv-filter` conda 环境（Python 3.12.x x64，
