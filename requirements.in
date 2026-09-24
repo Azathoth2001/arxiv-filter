@@ -1,0 +1,15 @@
+# 直接运行时依赖 + 已评审的版本区间（方案第 2 部分「版本策略」）。
+# 本文件是 requirements.lock 的输入；精确 patch 版本与 hash 只在构建日由
+# pip-compile 生成，不在此处假装已验证未来版本。
+#
+# 生成 lock：
+#   python -m piptools compile --generate-hashes --resolver=backtracking \
+#     --output-file requirements.lock requirements.in
+
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+httpx>=0.28,<1
+pydantic>=2.10,<3
+defusedxml>=0.7,<1
+platformdirs>=4,<5
+openpyxl>=3.1,<4

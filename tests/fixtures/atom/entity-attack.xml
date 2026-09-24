@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE feed [
+  <!ENTITY xxe SYSTEM "file:///c:/windows/win.ini">
+  <!ENTITY bomb "AAAAAAAAAA">
+]>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/"
+      xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <id>https://arxiv.org/api/entityAttackExample</id>
+  <title>arXiv Query: &xxe;</title>
+  <updated>2026-09-24T00:00:00Z</updated>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <entry>
+    <id>http://arxiv.org/abs/2501.30001v1</id>
+    <title>&bomb;&bomb;&bomb;&bomb;</title>
+    <updated>2025-01-05T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/2501.30001v1" rel="alternate" type="text/html"/>
+    <summary>Entity expansion must be refused outright.</summary>
+    <category term="cs.CR" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-01-05T00:00:00Z</published>
+    <arxiv:primary_category term="cs.CR"/>
+  </entry>
+</feed>

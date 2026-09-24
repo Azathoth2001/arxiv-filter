@@ -1,0 +1,96 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arxiv-filter"
+# 版本唯一权威来源是 src/arxiv_filter/__init__.py:__version__
+dynamic = ["version"]
+description = "Windows 本地 arXiv 文献收件箱：按分类/UTC 日期/关键词筛选、去重、缓存、已读追踪与多格式导出"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "arxiv-filter contributors" }]
+keywords = ["arxiv", "literature", "research", "windows", "offline-first"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+# 依赖区间来自方案第 2 部分；精确 patch 由 requirements.lock 锁定。
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
+    "httpx>=0.28,<1",
+    "pydantic>=2.10,<3",
+    "defusedxml>=0.7,<1",
+    "platformdirs>=4,<5",
+    "openpyxl>=3.1,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.24,<2",
+    "pytest-cov>=6,<7",
+    "respx>=0.21,<1",
+    "pip-tools>=7.4,<8",
+]
+package = [
+    "pyinstaller>=6,<7",
+]
+e2e = [
+    "playwright>=1.48,<2",
+]
+
+[project.scripts]
+arxiv-filter = "arxiv_filter.__main__:main"
+
+[project.urls]
+Documentation = "https://info.arxiv.org/help/api/user-manual.html"
+"API Terms" = "https://info.arxiv.org/help/api/tou.html"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "arxiv_filter.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+arxiv_filter = [
+    "data/*.json",
+    "static/**/*",
+    "storage/migrations/*.sql",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "live_arxiv: 真实访问 export.arxiv.org 的测试；默认被 socket deny-list 阻止，需 ARXIV_LIVE_TESTS=1",
+    "e2e: 需要 Playwright 与浏览器的端到端测试",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::DeprecationWarning:arxiv_filter.*"]
+
+[tool.coverage.run]
+branch = true
+source = ["arxiv_filter"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

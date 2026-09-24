@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.ruff_cache/
+.mypy_cache/
+
+# 构建与打包产物
+packaging/build/
+packaging/dist/
+*.spec.bak
+release-report.json
+
+# 运行期数据（正常写入 %LOCALAPPDATA%\ArxivFilter，这里防止误提交）
+# 必须用前导斜杠锚定到仓库根：写成 `data/` 会匹配**任意层级**的 data 目录，
+# 连带把 src/arxiv_filter/data/ 与 scripts/data/ 一起忽略掉——
+# 而 git 无法重新包含已被忽略目录里的文件，那些随包发布的 JSON 就再也提交不上了。
+/data/
+/logs/
+*.db
+*.db-wal
+*.db-shm
+runtime.json
+config.json
+
+# 导出产物
+/exports/
+*.xlsx
+*.bib
+
+# 本地探测缓存（update_categories.py --from-cache 使用）
+.cache/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+*~
+
+# 例外：真正需要入库的数据文件
+!src/arxiv_filter/data/*.json
+!tests/fixtures/**/*.xml
+!tests/fixtures/**/*.json
+
+# 生成的候选分类快照（每次 update_categories.py 重新生成，不入库）
+src/arxiv_filter/data/categories.candidate.json

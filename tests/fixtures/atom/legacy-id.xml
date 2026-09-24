@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/legacyIdExample</id>
+  <title>arXiv Query: id_list with legacy identifiers</title>
+  <updated>2026-09-24T00:00:00Z</updated>
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <opensearch:itemsPerPage>3</opensearch:itemsPerPage>
+  <entry>
+    <id>http://arxiv.org/abs/hep-th/9901001v2</id>
+    <title>Legacy identifier with a version</title>
+    <updated>2000-06-01T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/hep-th/9901001v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/hep-th/9901001v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Legacy fixture.</summary>
+    <category term="hep-th" scheme="http://arxiv.org/schemas/atom"/>
+    <published>1999-01-04T00:00:00Z</published>
+    <arxiv:primary_category term="hep-th"/>
+    <author>
+      <name>Legacy Author</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/hep-th/9901001v1</id>
+    <title>Same legacy identifier, earlier version</title>
+    <updated>1999-01-04T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/hep-th/9901001v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/hep-th/9901001v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Legacy fixture, version 1.</summary>
+    <category term="hep-th" scheme="http://arxiv.org/schemas/atom"/>
+    <published>1999-01-04T00:00:00Z</published>
+    <arxiv:primary_category term="hep-th"/>
+    <author>
+      <name>Legacy Author</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/math.GT/0309136v1</id>
+    <title>Legacy identifier with a sub-archive</title>
+    <updated>2003-09-08T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/math.GT/0309136v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/math.GT/0309136v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Sub-archive legacy fixture.</summary>
+    <category term="math.GT" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2003-09-08T00:00:00Z</published>
+    <arxiv:primary_category term="math.GT"/>
+    <author>
+      <name>Topology Author</name>
+    </author>
+  </entry>
+</feed>

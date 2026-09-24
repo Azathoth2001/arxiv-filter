@@ -1,0 +1,14 @@
+# 开发与测试依赖；绝不打入 exe（方案 §2「测试」行、§8.2）。
+# -c requirements.lock 约束开发依赖不许把运行时依赖升到 lock 之外。
+
+-c requirements.lock
+
+pytest>=8,<9
+pytest-asyncio>=0.24,<2
+pytest-cov>=6,<7
+respx>=0.21,<1
+pip-tools>=7.4,<8
+
+# 打包与 E2E 只在需要时安装（方案 §7.1：Playwright 只放开发依赖）
+# pyinstaller>=6,<7
+# playwright>=1.48,<2

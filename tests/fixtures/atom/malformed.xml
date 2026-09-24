@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/malformedExample</id>
+  <title>arXiv Query: truncated response</title>
+  <updated>2026-09-24T00:00:00Z</updated>
+  <opensearch:totalResults>2</opensearch:totalResults>
+  <entry>
+    <id>http://arxiv.org/abs/2501.20001v1</id>
+    <title>This entry is cut off mid-element</title>
+    <updated>2025-01-05T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/2501.20001v1" rel="alternate" type="text/html"/>
+    <summary>The response was truncated here

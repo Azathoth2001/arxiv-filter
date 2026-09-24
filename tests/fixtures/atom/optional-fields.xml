@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/optionalFieldsExample</id>
+  <title>arXiv Query: optional field coverage</title>
+  <updated>2026-09-24T00:00:00Z</updated>
+  <opensearch:totalResults>4</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <opensearch:itemsPerPage>4</opensearch:itemsPerPage>
+  <entry>
+    <id>http://arxiv.org/abs/2501.00001v1</id>
+    <title>Every optional element present</title>
+    <updated>2025-01-03T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/2501.00001v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2501.00001v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Short abstract.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-01-02T00:00:00Z</published>
+    <arxiv:comment>Accepted at a venue</arxiv:comment>
+    <arxiv:journal_ref>Journal of Examples 12 (2025) 345-356</arxiv:journal_ref>
+    <arxiv:doi>10.1234/example.2025.001</arxiv:doi>
+    <arxiv:primary_category term="cs.CL"/>
+    <author>
+      <name>First Author</name>
+      <arxiv:affiliation>Example University</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Second Author</name>
+    </author>
+    <link rel="related" href="https://doi.org/10.1234/example.2025.001" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2501.00002v1</id>
+    <title>No optional elements at all</title>
+    <updated>2025-01-03T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/2501.00002v1" rel="alternate" type="text/html"/>
+    <summary>Another abstract.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-01-02T00:00:00Z</published>
+    <arxiv:primary_category term="cs.CL"/>
+    <author>
+      <name>Solo Author</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2501.00003v1</id>
+    <title>Missing primary_category and missing pdf link</title>
+    <updated>2025-01-03T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/2501.00003v1" rel="alternate" type="text/html"/>
+    <summary>Third abstract.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-01-02T00:00:00Z</published>
+    <author>
+      <name>Third Author</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2501.00004v1</id>
+    <title>External ACM and MSC categories alongside arXiv ones</title>
+    <updated>2025-01-03T00:00:00Z</updated>
+    <link href="https://arxiv.org/abs/2501.00004v1" rel="alternate" type="text/html"/>
+    <summary>Fourth abstract.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="I.2.7" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="68T50" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-01-02T00:00:00Z</published>
+    <arxiv:primary_category term="cs.CL"/>
+    <author>
+      <name>Fourth Author</name>
+    </author>
+  </entry>
+</feed>

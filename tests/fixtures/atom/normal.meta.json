@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "normal.xml 的来源与指纹（方案 §7.3 第 3 条）。",
+    "只记录公开的描述性元数据所需的来源信息；不含 Cookie、代理、IP 或 Authorization。"
+  ],
+  "file": "normal.xml",
+  "source_url": "https://export.arxiv.org/api/query?id_list=1706.03762,2101.00001,1503.00001&start=0&max_results=3",
+  "endpoint": "https://export.arxiv.org/api/query",
+  "fetched_at_utc": "2026-09-24T13:54:26Z",
+  "http_status": 200,
+  "content_type": "application/atom+xml; charset=utf-8",
+  "content_length": 7156,
+  "user_agent": "arxiv-filter-connectivity-check/0.1 (personal research client)",
+  "sha256": "86f65e7fa4d0d8ab7811eaf8718970c2078ba9b29f2d7b615a8e3481422c8d66",
+  "entries": 3,
+  "query_kind": "id_list",
+  "note": [
+    "用 id_list 而不是 search_query 抓取：2026-09-24 实测 search_query 会间歇性返回",
+    "HTTP 406 空响应体（见 docs/api-verification.md §3），id_list 则稳定 200。",
+    "该文件是原始响应字节，未做任何修改。"
+  ]
+}

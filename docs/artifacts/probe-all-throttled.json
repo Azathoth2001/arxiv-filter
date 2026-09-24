@@ -1,0 +1,395 @@
+{
+  "mode": "all",
+  "results": [
+    {
+      "probe": "smoke",
+      "status": 200,
+      "content_type": "application/atom+xml; charset=utf-8",
+      "url": "https://export.arxiv.org/api/query?id_list=2101.00001&start=0&max_results=1",
+      "retry_after": null,
+      "content_length": 2243,
+      "ok": true,
+      "root_tag": "feed",
+      "root_namespace": "http://www.w3.org/2005/Atom",
+      "atom_error": false,
+      "error_entries": [],
+      "entry_count": 1,
+      "total": "1",
+      "start_index": "0",
+      "items_per_page": "1",
+      "feed_updated": "2026-09-24T13:19:21Z",
+      "namespaces_seen": [
+        "http://a9.com/-/spec/opensearch/1.1/",
+        "http://arxiv.org/schemas/atom",
+        "http://www.w3.org/2005/Atom"
+      ]
+    },
+    {
+      "probe": "redirect",
+      "http_status": 301,
+      "location": "https://export.arxiv.org/api/query",
+      "same_host": true,
+      "ok": true
+    },
+    {
+      "probe": "fields",
+      "default_query": "cat:cs.CL",
+      "cases": [
+        {
+          "case": "single_category_with_date",
+          "params": {
+            "search_query": "cat:cs.CL AND submittedDate:[202401010000 TO 202401072359]",
+            "start": 0,
+            "max_results": 2,
+            "sortBy": "submittedDate",
+            "sortOrder": "descending"
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL+AND+submittedDate%3A%5B202401010000+TO+202401072359%5D&start=0&max_results=2&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "case": "multi_category",
+          "params": {
+            "search_query": "(cat:cs.CL OR cat:cs.AI) AND submittedDate:[202401010000 TO 202401032359]",
+            "start": 0,
+            "max_results": 2,
+            "sortBy": "submittedDate",
+            "sortOrder": "descending"
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=%28cat%3Acs.CL+OR+cat%3Acs.AI%29+AND+submittedDate%3A%5B202401010000+TO+202401032359%5D&start=0&max_results=2&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "case": "title_phrase",
+          "params": {
+            "search_query": "ti:\"large language model\"",
+            "start": 0,
+            "max_results": 2,
+            "sortBy": "relevance",
+            "sortOrder": "descending"
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=ti%3A%22large+language+model%22&start=0&max_results=2&sortBy=relevance&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "case": "author_phrase",
+          "params": {
+            "search_query": "au:\"Geoffrey Hinton\"",
+            "start": 0,
+            "max_results": 2,
+            "sortBy": "submittedDate",
+            "sortOrder": "descending"
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=au%3A%22Geoffrey+Hinton%22&start=0&max_results=2&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "case": "boolean_andnot",
+          "params": {
+            "search_query": "(ti:transformer OR abs:transformer) ANDNOT cat:cs.CV",
+            "start": 0,
+            "max_results": 2,
+            "sortBy": "relevance",
+            "sortOrder": "descending"
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=%28ti%3Atransformer+OR+abs%3Atransformer%29+ANDNOT+cat%3Acs.CV&start=0&max_results=2&sortBy=relevance&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "case": "pagination_offset",
+          "params": {
+            "search_query": "cat:cs.CL",
+            "start": 10,
+            "max_results": 5,
+            "sortBy": "submittedDate",
+            "sortOrder": "descending"
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL&start=10&max_results=5&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "case": "count_only_forbidden",
+          "params": {
+            "search_query": "cat:cs.CL",
+            "start": 0,
+            "max_results": 0
+          },
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL&start=0&max_results=0",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        }
+      ]
+    },
+    {
+      "probe": "case_sensitivity",
+      "upper": {
+        "status": 406,
+        "content_type": "",
+        "url": "https://export.arxiv.org/api/query?search_query=ti%3A%22LARGE+LANGUAGE+MODEL%22&max_results=1",
+        "retry_after": null,
+        "content_length": 0,
+        "ok": false,
+        "reason": "non_xml_content_type",
+        "body_prefix": ""
+      },
+      "lower": {
+        "status": 406,
+        "content_type": "",
+        "url": "https://export.arxiv.org/api/query?search_query=ti%3A%22large+language+model%22&max_results=1",
+        "retry_after": null,
+        "content_length": 0,
+        "ok": false,
+        "reason": "non_xml_content_type",
+        "body_prefix": ""
+      },
+      "same_total": true,
+      "ok": false
+    },
+    {
+      "probe": "chinese",
+      "status": 406,
+      "content_type": "",
+      "url": "https://export.arxiv.org/api/query?search_query=all%3A%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0&max_results=1",
+      "retry_after": null,
+      "content_length": 0,
+      "ok": false,
+      "reason": "non_xml_content_type",
+      "body_prefix": ""
+    },
+    {
+      "probe": "special",
+      "literals": [
+        {
+          "literal": "all:\"C++\"",
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=all%3A%22C%2B%2B%22&max_results=1",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "literal": "all:state-of-the-art",
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=all%3Astate-of-the-art&max_results=1",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "literal": "ti:attention",
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=ti%3Aattention&max_results=1",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "literal": "all:\"multi-agent\"",
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=all%3A%22multi-agent%22&max_results=1",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "literal": "all:Transformer",
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=all%3ATransformer&max_results=1",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "literal": "abs:\"neural network\"",
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=abs%3A%22neural+network%22&max_results=1",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        }
+      ]
+    },
+    {
+      "probe": "post_form",
+      "get": {
+        "status": 406,
+        "content_type": "",
+        "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL&start=0&max_results=1&sortBy=submittedDate",
+        "retry_after": null,
+        "content_length": 0,
+        "ok": false,
+        "reason": "non_xml_content_type",
+        "body_prefix": "",
+        "first_entry_id": null
+      },
+      "post": {
+        "status": 406,
+        "content_type": "",
+        "url": "https://export.arxiv.org/api/query",
+        "retry_after": null,
+        "content_length": 0,
+        "ok": false,
+        "reason": "non_xml_content_type",
+        "body_prefix": "",
+        "first_entry_id": null
+      },
+      "same_first_entry": false,
+      "ok": false,
+      "note": "方案结论：不使用 POST；长分类表达式拆成多个顺序 GET。"
+    },
+    {
+      "probe": "page_size",
+      "query": "cat:cs.CL",
+      "sizes": [
+        100,
+        200,
+        500
+      ],
+      "results": [
+        {
+          "requested": 100,
+          "bytes": 238298,
+          "under_20mib": true,
+          "status": 200,
+          "content_type": "application/atom+xml; charset=utf-8",
+          "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL&start=0&max_results=100&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 238298,
+          "ok": true,
+          "root_tag": "feed",
+          "root_namespace": "http://www.w3.org/2005/Atom",
+          "atom_error": false,
+          "error_entries": [],
+          "entry_count": 100,
+          "total": "119894",
+          "start_index": "0",
+          "items_per_page": "100",
+          "feed_updated": "2026-09-24T13:09:53Z",
+          "namespaces_seen": [
+            "http://a9.com/-/spec/opensearch/1.1/",
+            "http://arxiv.org/schemas/atom",
+            "http://www.w3.org/2005/Atom"
+          ]
+        },
+        {
+          "requested": 200,
+          "bytes": 0,
+          "under_20mib": true,
+          "status": 406,
+          "content_type": "",
+          "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL&start=0&max_results=200&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 0,
+          "ok": false,
+          "reason": "non_xml_content_type",
+          "body_prefix": ""
+        },
+        {
+          "requested": 500,
+          "bytes": 1250225,
+          "under_20mib": true,
+          "status": 200,
+          "content_type": "application/atom+xml; charset=utf-8",
+          "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.CL&start=0&max_results=500&sortBy=submittedDate&sortOrder=descending",
+          "retry_after": null,
+          "content_length": 1250225,
+          "ok": true,
+          "root_tag": "feed",
+          "root_namespace": "http://www.w3.org/2005/Atom",
+          "atom_error": false,
+          "error_entries": [],
+          "entry_count": 500,
+          "total": "119894",
+          "start_index": "0",
+          "items_per_page": "500",
+          "feed_updated": "2026-09-24T13:25:44Z",
+          "namespaces_seen": [
+            "http://a9.com/-/spec/opensearch/1.1/",
+            "http://arxiv.org/schemas/atom",
+            "http://www.w3.org/2005/Atom"
+          ]
+        }
+      ]
+    },
+    {
+      "probe": "total_stability",
+      "query": "cat:cs.CL",
+      "first_total": null,
+      "second_total": null,
+      "stable": true,
+      "first_feed_updated": null,
+      "second_feed_updated": null
+    }
+  ],
+  "note": "window 模式需单独运行，避免超预算。",
+  "probe_version": "0.1.0",
+  "endpoint": "https://export.arxiv.org/api/query",
+  "user_agent": "arxiv-filter-connectivity-check/0.1 (personal research client)",
+  "started_at": "2026-09-24T13:32:20Z",
+  "elapsed_seconds": 74.66,
+  "requests_sent": 25,
+  "limiter_min_interval_s": 3.1,
+  "observed_min_interval_s": 3.093,
+  "limiter_respected": true,
+  "python": "3.12.14",
+  "platform": "win32"
+}
