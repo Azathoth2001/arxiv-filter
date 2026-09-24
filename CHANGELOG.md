@@ -141,6 +141,19 @@ POST 等价性、大小写、中文关键词、特殊字面量、官网 ±5% 对
   主分类冲突写警告；cross-list 只产生一条记录；保持首次出现顺序（不偷偷重排）；
 - 本地相关度严格实现方案 §4.4 的公式，负词先排除，权重可配置且进 cache key。
 
+### 版本控制
+
+- 建立本地 Git 仓库（`main` 分支），首次提交含阶段 0–1 全部产物。
+- 新增 `.gitattributes`：默认 `* text=auto eol=lf`，并把
+  `tests/fixtures/**` 与 `*.lock` 标为 `-text`。
+  原因：`tests/fixtures/atom/normal.xml` 的**字节**被 `normal.meta.json` 记录
+  并由测试断言，若 Git 在检出时做 LF→CRLF 转换，任何人克隆后跑测试都会失败。
+  已用真实克隆验证字节哈希不变。
+- 修正 `.gitignore` 的 `data/` 规则：它原本匹配**任意层级**的 `data` 目录，
+  连带忽略了 `src/arxiv_filter/data/` 与 `scripts/data/`；而 Git 无法重新包含
+  已被忽略目录里的文件，导致随包发布的分类快照与中文名种子文件提交不上。
+  已改为锚定仓库根的 `/data/`、`/logs/`、`/exports/`。
+
 ### 环境说明
 
 - 开发环境使用 miniforge 的 `arxiv-filter` conda 环境（Python 3.12.x x64，
