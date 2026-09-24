@@ -143,7 +143,10 @@ def test_single_category_that_is_still_too_long_stays_unsplit() -> None:
 def test_chunk_helper_honours_the_budget_directly() -> None:
     table = synthetic_taxonomy(40)
     ids = list(table.leaves_of_group("syn"))
-    chunks = query_builder._chunk_categories(ids, JAN1, JAN7, None, SearchScope.ALL, 600)
+    start_at, end_at = query_builder.day_bounds(JAN1, JAN7)
+    chunks = query_builder._chunk_categories(
+        ids, start_at, end_at, None, SearchScope.ALL, 600
+    )
     assert len(chunks) > 1
     for chunk in chunks:
         assert encoded_length(chunk) <= 600
@@ -152,6 +155,39 @@ def test_chunk_helper_honours_the_budget_directly() -> None:
 def test_encoded_length_counts_utf8_percent_encoding() -> None:
     assert encoded_length("cat:cs.CL") == len("cat%3Acs.CL")
     assert encoded_length("all:机器学习") == len("all%3A%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0")
+
+
+def test_day_bounds_are_minute_precise() -> None:
+    from datetime import datetime, timezone
+
+    start_at, end_at = query_builder.day_bounds(JAN1, JAN7)
+    assert start_at == datetime(2025, 1, 1, 0, 0, tzinfo=timezone.utc)
+    assert end_at == datetime(2025, 1, 7, 23, 59, tzinfo=timezone.utc)
+
+
+def test_minute_precision_range_overrides_the_whole_day() -> None:
+    """日期二分依赖它：半天片段必须真的渲染成半天，而不是偷偷扩回整天。"""
+    from datetime import datetime, timezone
+
+    query = build_query(
+        SearchRequest(group_id="cs", category_id="cs.CL", start_date=JAN1, end_date=JAN7),
+        start_at=datetime(2025, 1, 3, 0, 0, tzinfo=timezone.utc),
+        end_at=datetime(2025, 1, 3, 11, 59, tzinfo=timezone.utc),
+    )
+    assert "submittedDate:[202501030000 TO 202501031159]" in query.expression
+
+
+def test_minute_precision_range_changes_the_cache_key() -> None:
+    from datetime import datetime, timezone
+
+    request = SearchRequest(group_id="cs", category_id="cs.CL", start_date=JAN1, end_date=JAN7)
+    whole = build_query(request)
+    half = build_query(
+        request,
+        start_at=datetime(2025, 1, 1, 0, 0, tzinfo=timezone.utc),
+        end_at=datetime(2025, 1, 4, 11, 59, tzinfo=timezone.utc),
+    )
+    assert whole.cache_key != half.cache_key
 
 
 # —— paths 的 frozen 与便携分支 ——

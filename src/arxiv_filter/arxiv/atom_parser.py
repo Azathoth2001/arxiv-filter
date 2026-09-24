@@ -314,6 +314,27 @@ def _safe_prefix(payload: bytes) -> str:
     return " ".join(cleaned.split())[:200]
 
 
+def detect_atom_error(payload: bytes | str) -> str | None:
+    """如果 ``payload`` 是一条 Atom ``error`` entry，返回它的说明文本。
+
+    用于「非 200 但 Content-Type 是 XML」的场景：**必须**先确认它到底是不是
+    上游的参数错误说明，才能决定重试与否——500 也可能是 Atom error entry，
+    而 503 更可能是 HTML 错误页。
+
+    解析失败或不是 error entry 时返回 ``None``（调用方按状态码分类）。
+    """
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    try:
+        root = SafeET.fromstring(payload)
+    except Exception:  # noqa: BLE001 - 解析不了就交给调用方按状态码处理
+        return None
+    if root.tag != f"{{{NS['a']}}}feed":
+        return None
+    found = _find_error_entry(root)
+    return found[1] if found is not None else None
+
+
 def known_categories_from(taxonomy: Taxonomy) -> frozenset[str]:
     """便捷函数：从 taxonomy 取分类白名单。"""
     return _known_category_ids(taxonomy)
@@ -322,6 +343,7 @@ def known_categories_from(taxonomy: Taxonomy) -> frozenset[str]:
 __all__ = [
     "MAX_DIAGNOSTIC_CHARS",
     "NS",
+    "detect_atom_error",
     "known_categories_from",
     "parse_atom",
     "parse_paper",

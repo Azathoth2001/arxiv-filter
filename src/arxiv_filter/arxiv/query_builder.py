@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date
+from datetime import date, datetime, time, timezone
 from urllib.parse import quote
 
 from arxiv_filter.arxiv.query_lexer import parse_keywords
@@ -67,11 +67,34 @@ def format_date_bound(value: date, *, end_of_day: bool) -> str:
     return f"{value:%Y%m%d}{'2359' if end_of_day else '0000'}"
 
 
+def format_minute_bound(value: datetime) -> str:
+    """把带时区的 datetime 渲染成 arXiv 的 ``YYYYMMDDHHMM``（UTC）。"""
+    return value.astimezone(timezone.utc).strftime("%Y%m%d%H%M")
+
+
 def build_date_clause(start: date, end: date) -> str:
     """``submittedDate:[YYYYMMDD0000 TO YYYYMMDD2359]``。"""
     return (
         f"submittedDate:[{format_date_bound(start, end_of_day=False)}"
         f" TO {format_date_bound(end, end_of_day=True)}]"
+    )
+
+
+def build_date_clause_at(start: datetime, end: datetime) -> str:
+    """分钟精度的日期条件。
+
+    日期二分（方案 §5.5 第 8 条）会产生半天甚至一分钟的片段，而 ``submittedDate``
+    本身就支持分钟精度。分片**必须**用分钟表达——否则半天片段会被悄悄扩回整天，
+    又超过 9500 窗口，二分就白做了。
+    """
+    return f"submittedDate:[{format_minute_bound(start)} TO {format_minute_bound(end)}]"
+
+
+def day_bounds(start: date, end: date) -> tuple[datetime, datetime]:
+    """UTC 自然日闭区间 → 分钟精度的 ``(00:00, 23:59)``。"""
+    return (
+        datetime.combine(start, time(0, 0), tzinfo=timezone.utc),
+        datetime.combine(end, time(23, 59), tzinfo=timezone.utc),
     )
 
 
@@ -192,20 +215,24 @@ def build_expression(
 def build_canonical_payload(
     *,
     category_ids: list[str],
-    start: date,
-    end: date,
+    start_at: datetime,
+    end_at: datetime,
     keyword_ast: KeywordExpression | None,
     scope: SearchScope,
     sort_value: str,
     result_cap: int,
 ) -> dict[str, object]:
-    """构造 cache key 的 canonical payload（``docs/data-schema.md`` §4）。"""
+    """构造 cache key 的 canonical payload（``docs/data-schema.md`` §4）。
+
+    时间用 **UTC 分钟精度**：日期二分产生的分片各有自己的时间段，
+    因此也各有自己的 cache key——这是对的，它们本来就是不同的上游请求。
+    """
     return {
         "query_semantics_version": QUERY_SEMANTICS_VERSION,
         "provider": PROVIDER_NAME,
         "category_ids": sorted(category_ids),
-        "start_utc": f"{start:%Y-%m-%d}T00:00:00Z",
-        "end_utc": f"{end:%Y-%m-%d}T23:59:00Z",
+        "start_utc": start_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:00Z"),
+        "end_utc": end_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:00Z"),
         "keyword_ast": keyword_ast.canonical() if keyword_ast is not None else None,
         "scope": str(scope),
         "sort": str(sort_value),
@@ -231,8 +258,8 @@ def encoded_length(expression: str) -> int:
 
 def _chunk_categories(
     category_ids: list[str],
-    start: date,
-    end: date,
+    start_at: datetime,
+    end_at: datetime,
     keyword_expression: KeywordExpression | None,
     scope: SearchScope,
     budget: int,
@@ -242,7 +269,7 @@ def _chunk_categories(
     只有在**超长**时才会走到这里；单分类仍然超长时只能原样返回一块，
     由上游决定是否拒绝（现实中不会发生，因为单个分类 ID 只有几个字符）。
     """
-    date_clause = build_date_clause(start, end)
+    date_clause = build_date_clause_at(start_at, end_at)
     chunks: list[str] = []
     current: list[str] = []
 
@@ -280,8 +307,13 @@ def build_query(
     request: SearchRequest,
     *,
     taxonomy: Taxonomy | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
 ) -> BuiltQuery:
     """把一次 :class:`SearchRequest` 编译成可发给 arXiv 的 :class:`BuiltQuery`。
+
+    ``start_at`` / ``end_at`` 用**分钟精度**覆盖日期范围，供日期二分分片使用
+    （方案 §5.5 第 8 条）。为 ``None`` 时按 UTC 自然日闭区间展开。
 
     抛出 :class:`~arxiv_filter.errors.ArxivFilterError`：
 
@@ -295,7 +327,11 @@ def build_query(
     )
     keyword_expression = parse_keywords(request.keywords)
 
-    date_clause = build_date_clause(request.start_date, request.end_date)
+    default_start, default_end = day_bounds(request.start_date, request.end_date)
+    range_start = start_at or default_start
+    range_end = end_at or default_end
+
+    date_clause = build_date_clause_at(range_start, range_end)
     base_clause = f"{build_category_clause(category_ids)} AND {date_clause}"
 
     expression = build_expression(base_clause, keyword_expression, request.scope)
@@ -304,8 +340,8 @@ def build_query(
 
     payload = build_canonical_payload(
         category_ids=category_ids,
-        start=request.start_date,
-        end=request.end_date,
+        start_at=range_start,
+        end_at=range_end,
         keyword_ast=keyword_expression,
         scope=request.scope,
         sort_value=str(request.sort),
@@ -316,8 +352,8 @@ def build_query(
     if encoded_length(expression) > MAX_ENCODED_QUERY_CHARS:
         chunks = _chunk_categories(
             category_ids,
-            request.start_date,
-            request.end_date,
+            range_start,
+            range_end,
             keyword_expression,
             request.scope,
             MAX_ENCODED_QUERY_CHARS,
@@ -346,11 +382,14 @@ __all__ = [
     "build_canonical_payload",
     "build_category_clause",
     "build_date_clause",
+    "build_date_clause_at",
     "build_expression",
     "build_query",
     "cache_key_for",
     "canonical_json",
+    "day_bounds",
     "encoded_length",
     "format_date_bound",
+    "format_minute_bound",
     "render_keywords",
 ]
