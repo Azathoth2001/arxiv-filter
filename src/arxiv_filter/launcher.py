@@ -1,25 +1,40 @@
-"""启动器：命令行入口、单实例、端口绑定、健康检查、打开浏览器。
-
-阶段 0（T0.4）只交付 **命令行契约**：``--version`` 必须工作，且参数解析在
-没有服务端实现时也能给出中文提示。单实例、端口、令牌、健康检查和浏览器
-拉起属于 T4.3，届时填充 :func:`_run_server`。
-"""
+"""Local app launcher: single instance, loopback server, session token, and browser."""
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import logging
+import os
 import platform
+import secrets
+import socket
 import sys
+import time
 from typing import Sequence
+from urllib.parse import urlencode
+
+import httpx
+from logging.handlers import RotatingFileHandler
 
 from arxiv_filter import SCHEMA_VERSION, __version__
+from arxiv_filter.application import serve_application
 from arxiv_filter.errors import ArxivFilterError, ErrorCode
-from arxiv_filter.paths import data_dir, log_path
+from arxiv_filter.paths import ensure_dirs, log_path, runtime_path
+from arxiv_filter.runtime import (
+    RuntimeRecord,
+    SingleInstanceLock,
+    bind_loopback,
+    process_is_alive,
+    read_runtime,
+    remove_runtime,
+    write_runtime,
+)
 
 PROG = "arxiv-filter"
 
-#: 服务端实现完成后由 T4.3 置为 True；在此之前 ``python -m arxiv_filter`` 只打印提示。
-_SERVER_IMPLEMENTED = False
+logger = logging.getLogger(__name__)
+INSTANCE_START_WAIT_SECONDS = 5.0
 
 
 def configure_stdio() -> None:
@@ -88,18 +103,128 @@ def version_text() -> str:
     )
 
 
-def _run_server(args: argparse.Namespace) -> int:  # pragma: no cover - T4.3
-    """启动本地服务。由 T4.3 实现（单实例、token、健康检查、开浏览器）。"""
-    raise ArxivFilterError(
-        ErrorCode.LAUNCH_FAILED,
-        details={"phase": "T4.3", "data_dir": str(data_dir())},
-        message_zh=(
-            "阶段 0 只交付工程骨架，Web 服务尚未实现（计划在 T4.3 完成）。\n"
-            f"当前可写数据目录：{data_dir()}\n"
-            f"日志将写入：{log_path()}\n"
-            f"可用参数：--version、--help。"
-        ),
-    )
+def _configure_logging(level: str) -> None:
+    ensure_dirs()
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, level))
+    if not any(isinstance(handler, RotatingFileHandler) for handler in root.handlers):
+        handler = RotatingFileHandler(
+            log_path(),
+            maxBytes=2 * 1024 * 1024,
+            backupCount=4,
+            encoding="utf-8",
+        )
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+        root.addHandler(handler)
+
+
+def _existing_session(record: RuntimeRecord) -> str | None:
+    if not process_is_alive(record.pid):
+        return None
+    params = urlencode({"challenge": record.challenge})
+    url = f"http://127.0.0.1:{record.port}/api/v1/system/health?{params}"
+    try:
+        with httpx.Client(trust_env=False, timeout=0.75) as client:
+            response = client.get(url)
+        response.raise_for_status()
+        value = response.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    token = value.get("session_token") if isinstance(value, dict) else None
+    if (
+        isinstance(value, dict)
+        and value.get("status") == "ok"
+        and value.get("challenge_valid") is True
+        and isinstance(token, str)
+        and len(token) >= 32
+    ):
+        return token
+    return None
+
+
+def _open_existing_instance(path, *, wait_seconds: float = INSTANCE_START_WAIT_SECONDS) -> bool:
+    """Open an already-running app; never start a second server on a held lock."""
+    import webbrowser
+
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        record = read_runtime(path)
+        if record is not None:
+            token = _existing_session(record)
+            if token is not None:
+                url = f"http://127.0.0.1:{record.port}/#token={token}"
+                webbrowser.open(url, new=2)
+                return True
+        time.sleep(0.1)
+    return False
+
+
+def _run_server(args: argparse.Namespace) -> int:
+    """Launch one authenticated localhost server on a pre-bound loopback socket."""
+    try:
+        _configure_logging(args.log_level)
+    except OSError as exc:
+        raise ArxivFilterError(
+            ErrorCode.LAUNCH_FAILED,
+            message_zh="无法创建本地数据或日志目录，请检查目录权限。",
+        ) from exc
+    runtime_file = runtime_path()
+    lock = SingleInstanceLock(runtime_file.with_suffix(".lock"))
+    if not lock.acquire():
+        if _open_existing_instance(runtime_file):
+            return 0
+        raise ArxivFilterError(
+            ErrorCode.LAUNCH_FAILED,
+            message_zh="已有实例正在启动，但尚未通过本地健康校验；为安全起见不会启动第二个服务。请稍候再试。",
+        )
+
+    old_record = read_runtime(runtime_file)
+    if old_record is not None:
+        remove_runtime(runtime_file, expected_challenge=old_record.challenge)
+
+    listener: socket.socket | None = None
+    challenge = secrets.token_hex(16)
+    token = secrets.token_hex(16)
+    try:
+        try:
+            listener = bind_loopback(args.port)
+        except (OSError, ValueError) as exc:
+            raise ArxivFilterError(
+                ErrorCode.LAUNCH_FAILED,
+                details={"reason": "loopback_bind_failed"},
+                message_zh="无法在本机回环地址启动服务，请检查端口是否可用后重试。",
+            ) from exc
+
+        port = int(listener.getsockname()[1])
+        record = RuntimeRecord(pid=os.getpid(), port=port, challenge=challenge)
+
+        def record_ready() -> None:
+            write_runtime(runtime_file, record)
+
+        asyncio.run(
+            serve_application(
+                listener,
+                port=port,
+                auth_token=token,
+                challenge=challenge,
+                log_level=args.log_level,
+                on_ready=record_ready,
+                open_browser=not args.no_browser,
+            )
+        )
+        return 0
+    except ArxivFilterError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - startup details stay in the local log
+        logger.exception("本地服务启动失败", exc_info=exc)
+        raise ArxivFilterError(ErrorCode.LAUNCH_FAILED) from exc
+    finally:
+        remove_runtime(runtime_file, expected_challenge=challenge)
+        if listener is not None:
+            listener.close()
+        lock.release()
 
 
 def main(argv: Sequence[str] | None = None) -> int:

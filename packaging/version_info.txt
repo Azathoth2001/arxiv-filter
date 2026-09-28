@@ -1,0 +1,30 @@
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(0, 1, 0, 0),
+    prodvers=(0, 1, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x4,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '040904B0',
+        [
+          StringStruct('CompanyName', 'arXiv Filter contributors'),
+          StringStruct('FileDescription', 'Local arXiv literature inbox'),
+          StringStruct('FileVersion', '0.1.0'),
+          StringStruct('InternalName', 'arxiv-filter'),
+          StringStruct('LegalCopyright', 'Copyright (c) 2026 arXiv Filter contributors'),
+          StringStruct('OriginalFilename', 'arxiv-filter.exe'),
+          StringStruct('ProductName', 'arXiv Filter'),
+          StringStruct('ProductVersion', '0.1.0'),
+        ]
+      )
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

@@ -1,142 +1,197 @@
-# arxiv-filter
+# arXiv Filter
 
-Windows 本地 arXiv 文献收件箱：用中文界面组合**分类 + UTC 日期 + 关键词**，
-串行、限速地读取 arXiv Atom 元数据，在本机完成去重、排序、缓存、新增/已读追踪和五种格式导出。
+**English** · [简体中文](README.zh-CN.md)
 
-无需账号、无需 Docker、无需数据库服务器。数据只写本机 `%LOCALAPPDATA%\ArxivFilter`。
+> A local-first literature inbox for arXiv. Filter by category, UTC submission date and
+> keywords, then read, track and export — with everything stored on your own machine.
 
-> 当前状态：**阶段 0–2 已完成，阶段 3 的客户端部分已完成**（数据模型、关键词解析、
-> 查询构造、Atom 解析、ID 与去重、限速器、HTTP 客户端、分页器、SQLite 存储），
-> 657 个离线测试覆盖。
-> Web 服务、UI、搜索编排（T3.4）、导出器与打包**尚未实现**，
-> 因此现在还不能作为完整应用验收。进度对照见下方「实现进度」。
+<span id="what-it-is"></span>
 
----
+## What it is
 
-## 实现进度
+A small Windows desktop tool that turns arXiv's Atom API into a readable, filterable
+inbox. You pick a category, a UTC date range and (optionally) keywords; it fetches the
+matching papers, de-duplicates them, caches them locally, tracks what you have already
+seen or read, and exports the result in five formats.
 
-对照方案第 6 部分的阶段划分：
+- No account, no Docker, no database server.
+- Data is written only to `%LOCALAPPDATA%\ArxivFilter`.
+- The web UI is served on `127.0.0.1` (loopback only) and protected by a per-launch token.
 
-| 阶段 | 内容 | 状态 |
-| --- | --- | --- |
-| 0 | 决策与事实验证（T0.1–T0.4） | ✅ 已完成 |
-| 1 | 纯逻辑核心（T1.1–T1.5） | ✅ 已完成 |
-| 2 | SQLite 存储（T2.1–T2.3） | ✅ 已完成 |
-| 3 | 网络与搜索编排（T3.1–T3.3 ✅；T3.4 待接通缓存） | 🟡 部分完成 |
-| 4 | Job / API / 启动安全（T4.1–T4.3） | ⬜ 未开始 |
-| 5 | 前端（T5.1–T5.5） | ⬜ 未开始 |
-| 6 | 导出（T6.1–T6.4） | ⬜ 未开始 |
-| 7 | QA、打包与交付（T7.1–T7.5） | ⬜ 未开始 |
-
-> ⚠️ **上游限流阻塞**：2026-09-24 实测 `export.arxiv.org` 会对本机返回
-> **HTTP 406 空响应体**，连 `id_list` 单条查询也不例外。产品已能正确识别并退避
-> （不误报成关键词错误），但在它恢复之前无法做端到端验收。
-> 详见 `docs/api-verification.md` §3.6–§3.9。
-
-现在可以运行的只有开发者命令（见下）；`python -m arxiv_filter` 会明确提示
-「Web 服务尚未实现（计划在 T4.3 完成）」，不会假装启动成功。
-
----
-
-## 这是什么 / 不是什么
-
-**是**：一个个人的、离线优先的文献筛选工具。它解决的是「每天翻 arXiv 新投稿太慢」的问题。
-
-**不是**：不是 arXiv 官方产品，不代表 arXiv 立场。它是把 arXiv 公开的
-[legacy Atom API](https://info.arxiv.org/help/api/user-manual.html) 包了一层中文界面和本地缓存。
+**It is not** an official arXiv product and is not affiliated with arXiv in any way.
+It wraps arXiv's public [legacy Atom API](https://info.arxiv.org/help/api/user-manual.html)
+with a Chinese-language UI and a local cache.
 
 > Thank you to arXiv for use of its open access interoperability.
 
-## 30 秒开始
+## Features
+
+| | |
+|---|---|
+| **Search** | First-level + second-level category, inclusive UTC date range, keyword expressions with `AND` / `OR` / `NOT` and quoted phrases, field scope (all / title / abstract / author), three sort orders, configurable result cap |
+| **Reading list** | Card layout, expandable abstract, mark read/unread, "new vs. seen" tracking that does not change while you scroll |
+| **LaTeX rendering** | Math in titles and abstracts renders as real formulas (KaTeX, bundled locally — works offline) |
+| **Local cache** | SQLite with WAL; fresh results reused for 6 hours, stale kept 30 days, 500 MiB LRU cap that never evicts your read state |
+| **History** | Last 500 queries (or 90 days); click one to refill the form |
+| **Export** | CSV (Excel-compatible, formula-injection safe), XLSX, JSON, Markdown, BibTeX |
+| **Privacy** | Loopback-only server, CSP with no inline scripts, no third-party analytics, redacted diagnostic logs, proxy credentials never echoed back |
+
+## Requirements
+
+- **Windows 10 (1803+) or Windows 11, 64-bit**
+- To run the prebuilt executable: nothing else.
+- To build/run from source: **Python 3.12 x64**, plus **Node.js 24+** for the frontend tests.
+
+> The app issues arXiv requests through the system `curl.exe` by default, because arXiv's
+> edge intermittently rejects the `httpx` client fingerprint with `HTTP 406`. `curl` ships
+> with Windows 10 1803+. If it is missing, the app falls back to `httpx` automatically and
+> logs a warning — and may then hit that 406. See `docs/api-verification.md` §3.10.
+
+## Quick start
+
+### Option A — run the prebuilt executable
+
+Download the release archive and double-click:
+
+```text
+arxiv-filter-windows-x64\start.bat      # recommended (onedir: starts fastest)
+arxiv-filter.exe                        # single-file build, also self-contained
+```
+
+Your default browser opens the UI automatically. Nothing is installed system-wide:
+deleting the folder uninstalls it.
+
+Windows SmartScreen may warn on first launch because the build is unsigned — choose
+**More info → Run anyway**.
+
+### Option B — run from source
 
 ```bat
-:: 1. 获取源码
-git clone <repo> arxiv-filter
+git clone <your-fork-url> arxiv-filter
 cd arxiv-filter
 
-:: 2. 建环境（本机用 miniforge；若已有 Python 3.12 也可用 py -3.12 -m venv .venv）
-D:\miniforge3\Scripts\conda.exe create -n arxiv-filter -c conda-forge python=3.12 pip -y
+:: create an environment (3.12 required)
+conda create -n arxiv-filter -c conda-forge python=3.12 pip -y
+conda run -n arxiv-filter python -m pip install -e ".[dev]"
 
-:: 3. 安装
-D:\miniforge3\Scripts\conda.exe run -n arxiv-filter python -m pip install -e ".[dev]"
-
-:: 4. 检查
-D:\miniforge3\Scripts\conda.exe run -n arxiv-filter python -m arxiv_filter --version
+:: verify
+conda run -n arxiv-filter python -m arxiv_filter --version
 ```
 
-源码模式下双击 `start-dev.bat` 即可，它会自动按 `.venv` → miniforge `arxiv-filter` → PATH 的顺序找解释器。
+Then double-click `start-dev.bat`, which finds an interpreter in the order
+`.venv` → conda env `arxiv-filter` → `PATH`, starts the loopback server and opens the UI.
 
----
+## Usage in 30 seconds
 
-## 常用命令
+1. Pick a **first-level category** (defaults to Mathematics) and optionally a
+   **second-level category** (defaults to Analysis of PDEs).
+2. Adjust the **UTC date range** — the last 7 days are pre-filled; the `3 / 7 / 30 days`
+   and `This month` shortcuts are one click away.
+3. Type **keywords** if you want to narrow things down. Leave empty to search by category
+   and date alone. Examples:
+   - `PDEs AND Hessian AND estimate` — all three terms (intersection)
+   - `PDEs Hessian estimate` — identical to the above; adjacent terms imply `AND`
+   - `"large language model" AND retrieval NOT survey` — phrase, intersection, exclusion
+   - Do **not** separate terms with commas.
+4. Click **开始筛选 / Start filtering**. Progress is shown; you can cancel at any time.
+5. Work the results: open a title on arXiv, expand the abstract, mark read/unread, page
+   through, and **export** the whole filtered set when you are done.
+
+A longer Chinese walkthrough with troubleshooting lives in [`docs/使用教程.md`](docs/使用教程.md).
+
+## How it works
+
+```text
+Browser UI  ──HTTP──▶  FastAPI on 127.0.0.1 (token-gated, CSP-locked)
+                            │
+                            ├─ SearchService ──▶ SQLite cache ──▶ ArxivClient
+                            │                        (fresh / stale / miss)
+                            └─ JobManager (single serial job, progress, cancel)
+                                                     │
+                                          curl subprocess ──▶ export.arxiv.org Atom API
+```
+
+Design decisions worth knowing:
+
+- **One request at a time.** A process-wide rate limiter enforces a ≥4.0 s gap between
+  request starts and a single connection; identical concurrent queries collapse into one
+  upstream sequence.
+- **406 is treated as upstream rejection, not a syntax error.** It joins `429` on the
+  backoff path (retry once, then a 5-minute circuit breaker) and is never blamed on the
+  user's keywords.
+- **No fallback to third-party mirrors.** If the upstream fails, only a *stale cache* is
+  offered, and only after explicit confirmation.
+- **The original LaTeX is always preserved.** Rendering only affects the DOM; every export
+  format carries `summary_raw` verbatim.
+
+## Testing
 
 ```powershell
-# 版本
-python -m arxiv_filter --version
-
-# 离线测试（禁止联网，方案 §7.1 用 socket deny-list 强制）
+# offline suite (network is blocked by a socket deny-list)
 python -m pytest -m 'not live_arxiv' -q
 
-# 校验内置分类快照
-python scripts/validate_categories.py
+# browser E2E (needs Chrome/Edge; uses fake providers, never touches arXiv)
+$env:ARXIV_FILTER_BROWSER = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+python -m pytest -m e2e -q
 
-# 对照官方源刷新分类快照（真实联网）
-python scripts/update_categories.py            # 生成候选 + 打印 diff
-python scripts/update_categories.py --approve  # 人工审核后提升为正式文件
+# frontend unit tests (Node.js 24+)
+node --test "tests/frontend/*.test.mjs"
 
-# arXiv API 契约探测（真实联网，自动限速，默认间隔 4.5 秒）
-python scripts/probe_arxiv_api.py --mode smoke
-python scripts/probe_arxiv_api.py --mode fields --json-out probe-fields.json
+# opt-in live arXiv tests (default: skipped)
+$env:ARXIV_LIVE_TESTS = '1'; python -m pytest tests/live -q
 ```
 
-## 限流与礼貌访问
+Current state: **763 offline tests**, **11 browser E2E**, **14 frontend unit tests**, all
+green. Coverage is tracked with `pytest-cov`; the offline suite fails if it ever tries to
+open a socket.
 
-本产品严格遵守 arXiv 的
-[Terms of Use for arXiv APIs](https://info.arxiv.org/help/api/tou.html)：
+## Building the Windows executable
 
-- 全局**单连接**，任意两次请求起点至少间隔 **4 秒**（官方下限是 3 秒；
-  2026-09-24 实测贴着 3 秒会被上游以 HTTP 406 空响应体限流，见
-  `docs/api-verification.md`）；
-- 单实例运行，相同查询合并为一个上游序列，不做并发补偿；
-- 二级失败退避 3.2 / 6.4 / 12.8 秒；429 遵守 `Retry-After`，退避后仍失败则 5 分钟熔断；
-- **不**通过切换域名、多个 IP 或第三方镜像规避限流；
-- 主源失败时只提示使用过期缓存（需用户确认），**不**自动混用第三方数据。
+```powershell
+powershell -File packaging\build.ps1 -Mode All -Python <path-to-python3.12-x64.exe>
+```
 
-## 数据与隐私
+The script creates an isolated hash-locked build environment, runs the offline + browser
+suites, freezes both an `onedir` and a `onefile` build with PyInstaller, runs a frozen
+smoke test, and writes `SHA256SUMS.txt` plus `release-report.json`. It refuses to build on
+a dirty tree unless you pass `-AllowDirty` (clearly marked as a QA build).
 
-所有数据都在本机：
+## Project layout
+
+```text
+src/arxiv_filter/
+├── arxiv/          client, rate limiter, query lexer/builder, Atom parser, curl transport
+├── api/            FastAPI routes, schemas, security headers
+├── services/       search orchestration and job manager
+├── storage/        SQLite database, cache / history / read repositories, migrations
+├── static/         UI (vanilla ES modules, no build step) + vendored KaTeX
+└── data/           category taxonomy snapshot (zh-CN)
+docs/               verification records, decisions, release checklist, user guide
+packaging/          PyInstaller specs and build tooling
+scripts/            taxonomy maintenance, API contract probe, license manifest
+tests/              unit · e2e (Playwright) · frontend (node:test) · live (opt-in)
+```
+
+## Data and privacy
+
+Everything stays on this machine:
 
 ```text
 %LOCALAPPDATA%\ArxivFilter\
-├─ config.json
-├─ arxiv-filter.db        # 缓存、历史、已读状态（SQLite + WAL）
-├─ runtime.json           # 单实例的 PID/端口/随机挑战
-├─ logs\app.log           # 5 × 2 MiB 轮转
-├─ exports\               # 默认下载目录
-└─ backup\                # 迁移前的数据库备份，保留最近 3 个
+├── config.json          preferences (proxy mode, open-marks-read)
+├── arxiv-filter.db      cache, query history, read state (SQLite + WAL)
+├── runtime.json         single-instance PID / port / challenge
+├── backup/              database snapshots
+├── exports/             files you exported
+└── logs/                redacted diagnostics (query text is hashed on disk)
 ```
 
-- 程序**不**向 exe 所在目录写任何文件；
-- 磁盘日志默认只记查询哈希，不记完整关键词；代理密码在日志中显示为 `***`；
-- 服务只监听 `127.0.0.1`，端口随机，并带每次启动生成的 128-bit 令牌；不开放 CORS。
+The only outbound traffic is the arXiv API query itself. No telemetry, no accounts.
 
-## 文档
+## License
 
-| 文档 | 内容 |
-| --- | --- |
-| `docs/decisions.md` | T0.1 冻结的 7 项产品决策 + 全部工程常量与变更记录 |
-| `docs/data-schema.md` | 时间/UTC 语义、seen-read 状态、SQLite、缓存键、HTTP 契约、taxonomy 运行时契约 |
-| `docs/api-verification.md` | 每次实测的日期、命令与原始结论（含 HTTP 406 限流发现） |
-| `docs/release-checklist.md` | Windows 交付验收清单（A1–A6）与阶段门禁 |
-| `CHANGELOG.md` | 各阶段变更记录 |
+MIT — see [`LICENSE`](LICENSE).
 
-## 关于「新增」与「已读」
-
-两者**分开**：论文第一次出现在结果列表里只记「已展示」（`seen_at`），
-只有你主动点「标记已读」或（打开开关后）打开 abs/PDF 才记「已读」（`read_at`）。
-这样滚动浏览不会把没读的论文标成已读。
-
-## 许可证与致谢
-
-数据来自 arXiv，使用其开放互操作接口。本工具与 arXiv 无隶属关系，
-未获得 arXiv 的赞助或背书。
+Bundled third-party components (KaTeX, and the Python dependencies of the frozen build)
+are listed with their licenses in `THIRD-PARTY-LICENSES.txt`, generated by
+`scripts/write_third_party_licenses.py`.

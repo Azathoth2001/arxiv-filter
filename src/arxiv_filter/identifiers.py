@@ -11,11 +11,17 @@ from __future__ import annotations
 import os
 import time
 import uuid
+from threading import Lock
 
 __all__ = ["REQUEST_ID_HEX_BYTES", "request_id", "uuid7"]
 
 #: 请求 ID 的随机字节数（128-bit 令牌同款强度，见方案 §1.3）。
 REQUEST_ID_HEX_BYTES = 16
+_UUID7_LOCK = Lock()
+_UUID7_LAST_MILLIS = 0
+_UUID7_LAST_RANDOM = 0
+_RANDOM_BITS = 74
+_RANDOM_MASK = (1 << _RANDOM_BITS) - 1
 
 
 def uuid7(timestamp_ms: int | None = None) -> uuid.UUID:
@@ -24,12 +30,33 @@ def uuid7(timestamp_ms: int | None = None) -> uuid.UUID:
     布局（RFC 9562 §5.7）：48 位毫秒时间戳 | 4 位版本(=7) | 12 位随机 |
     2 位变体(=0b10) | 62 位随机。
     """
+    global _UUID7_LAST_MILLIS, _UUID7_LAST_RANDOM
+
+    explicit_timestamp = timestamp_ms is not None
     millis = int(time.time() * 1000) if timestamp_ms is None else int(timestamp_ms)
     if not 0 <= millis < (1 << 48):
         raise ValueError("毫秒时间戳超出 48 位范围")
 
-    random_bits = int.from_bytes(os.urandom(10), "big")
-    rand_a = (random_bits >> 68) & 0xFFF
+    if explicit_timestamp:
+        # Explicit timestamps are a deterministic construction/test hook; normal
+        # application IDs use the monotonic path below.
+        random_bits = int.from_bytes(os.urandom(10), "big") & _RANDOM_MASK
+    else:
+        with _UUID7_LOCK:
+            if millis > _UUID7_LAST_MILLIS:
+                random_bits = int.from_bytes(os.urandom(10), "big") & _RANDOM_MASK
+            else:
+                millis = _UUID7_LAST_MILLIS
+                random_bits = _UUID7_LAST_RANDOM + 1
+                if random_bits > _RANDOM_MASK:
+                    millis += 1
+                    if millis >= (1 << 48):
+                        raise ValueError("UUIDv7 毫秒时间戳超出 48 位范围")
+                    random_bits = int.from_bytes(os.urandom(10), "big") & _RANDOM_MASK
+            _UUID7_LAST_MILLIS = millis
+            _UUID7_LAST_RANDOM = random_bits
+
+    rand_a = (random_bits >> 62) & 0xFFF
     rand_b = random_bits & ((1 << 62) - 1)
 
     value = (millis & ((1 << 48) - 1)) << 80

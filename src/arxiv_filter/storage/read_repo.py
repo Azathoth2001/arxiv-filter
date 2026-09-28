@@ -203,6 +203,15 @@ class ReadRepository:
         )
         return {row["canonical_id"]: _row_to_state(row) for row in rows}
 
+    async def snapshot_state(self) -> dict[str, ReadState]:
+        """读取完整已读/已展示快照，供一个搜索 job 冻结其展示语义。"""
+        rows = await self._db.read(
+            lambda c: c.execute(
+                "SELECT canonical_id, first_seen_at, last_seen_at, read_at FROM read_state"
+            ).fetchall()
+        )
+        return {row["canonical_id"]: _row_to_state(row) for row in rows}
+
     async def read_ids(self) -> set[str]:
         rows = await self._db.read(
             lambda c: c.execute(

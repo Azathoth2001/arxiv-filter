@@ -246,6 +246,21 @@ async def test_client_uses_exactly_one_connection(clock: FakeClock) -> None:
         await client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_proxy_reconfiguration_replaces_owned_client_without_network() -> None:
+    client = ArxivClient(config=ClientConfig(trust_env=True))
+    try:
+        await client.reconfigure_proxy("http://user:pass@proxy.example:8080", trust_env=False)
+        assert client.config.proxy_url == "http://user:pass@proxy.example:8080"
+        assert client.config.trust_env is False
+        assert client.connection_limits == (1, 1)
+        await client.reconfigure_proxy(None, trust_env=True)
+        assert client.config.proxy_url is None
+        assert client.config.trust_env is True
+    finally:
+        await client.aclose()
+
+
 # —— 重试与退避 ——
 
 

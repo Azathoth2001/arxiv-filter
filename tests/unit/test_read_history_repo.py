@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time as system_time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -73,6 +74,18 @@ def test_uuid7_rejects_out_of_range_timestamp() -> None:
 
 def test_uuid7_is_unique() -> None:
     assert len({uuid7_str() for _ in range(200)}) == 200
+
+
+def test_uuid7_generated_ids_are_monotonic_when_clock_stalls(monkeypatch) -> None:
+    current_millis = int(system_time.time() * 1000)
+    monkeypatch.setattr(
+        "arxiv_filter.identifiers.time.time",
+        lambda: current_millis / 1000,
+    )
+
+    values = [uuid7() for _ in range(50)]
+
+    assert values == sorted(values)
 
 
 # —— 已展示 ——

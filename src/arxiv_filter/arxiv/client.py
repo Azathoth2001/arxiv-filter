@@ -94,6 +94,14 @@ class ClientConfig:
     max_body_bytes: int = DEFAULT_MAX_BODY_BYTES
     timeout: httpx.Timeout = field(default_factory=lambda: DEFAULT_TIMEOUT)
     user_agent: str = USER_AGENT
+    proxy_url: str | None = None
+    trust_env: bool = True
+    #: Opt-in transport override. ``None`` keeps httpx's default transport — which is
+    #: what the test suite needs, because ``respx`` intercepts by replacing the
+    #: *default* transport and cannot see a client that carries an explicit one.
+    #: Production sets this to a curl-backed transport to work around arXiv's
+    #: intermittent 406 (see ``arxiv_filter.arxiv.curl_transport``).
+    transport: httpx.AsyncBaseTransport | None = None
 
 
 def parse_retry_after(value: str | None) -> float | None:
@@ -182,7 +190,9 @@ class ArxivClient:
             limits=httpx.Limits(max_connections=1, max_keepalive_connections=1),
             headers={"User-Agent": self.config.user_agent, "Accept": "application/atom+xml, application/xml"},
             follow_redirects=False,
-            trust_env=True,
+            trust_env=self.config.trust_env,
+            proxy=self.config.proxy_url,
+            transport=self.config.transport,
         )
         #: 熔断到期时刻（monotonic 语义由 asyncio 时钟提供，这里用事件循环时间）。
         self._circuit_open_until: float | None = None
@@ -193,6 +203,25 @@ class ArxivClient:
     async def aclose(self) -> None:
         if self._owns_client:
             await self._client.aclose()
+
+    async def reconfigure_proxy(self, proxy_url: str | None, *, trust_env: bool) -> None:
+        """Swap transport after an idle-only proxy settings change."""
+        if not self._owns_client:
+            raise RuntimeError("Cannot replace an injected HTTP client")
+        old_client = self._client
+        self.config.proxy_url = proxy_url
+        self.config.trust_env = trust_env
+        self._client = httpx.AsyncClient(
+            timeout=self.config.timeout,
+            limits=httpx.Limits(max_connections=1, max_keepalive_connections=1),
+            headers={"User-Agent": self.config.user_agent, "Accept": "application/atom+xml, application/xml"},
+            follow_redirects=False,
+            trust_env=trust_env,
+            proxy=proxy_url,
+            transport=self.config.transport,
+        )
+        await old_client.aclose()
+        self.reset_circuit()
 
     async def __aenter__(self) -> ArxivClient:
         return self

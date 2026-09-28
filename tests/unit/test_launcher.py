@@ -9,7 +9,10 @@ import pytest
 
 from arxiv_filter import ARXIV_ACKNOWLEDGEMENT, SCHEMA_VERSION, __version__
 from arxiv_filter.__main__ import main as module_main
+from arxiv_filter import launcher
 from arxiv_filter.launcher import build_parser, main as launcher_main, version_text
+from arxiv_filter.paths import runtime_path
+from arxiv_filter.runtime import read_runtime
 
 
 def test_version_is_semver() -> None:
@@ -41,12 +44,9 @@ def test_module_main_reaches_launcher(capsys: pytest.CaptureFixture[str]) -> Non
     assert __version__ in capsys.readouterr().out
 
 
-def test_run_without_version_reports_phase0_and_exits_nonzero(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    assert launcher_main([]) == 1
-    err = capsys.readouterr().err
-    assert "T4.3" in err
+def test_run_without_version_dispatches_to_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(launcher, "_run_server", lambda _args: 0)
+    assert launcher_main([]) == 0
 
 
 def test_help_lists_supported_flags() -> None:
@@ -63,6 +63,7 @@ def test_data_dir_flag_overrides_environment(
 
     override = tmp_path / "custom"
     monkeypatch.setenv("ARXIV_FILTER_DATA_DIR", str(tmp_path / "default"))
+    monkeypatch.setattr(launcher, "_run_server", lambda _args: 0)
     launcher_main(["--data-dir", str(override)])
     assert os.environ["ARXIV_FILTER_DATA_DIR"] == str(override)
     assert paths.data_dir() == override.resolve()
@@ -72,3 +73,28 @@ def test_unknown_flag_exits_with_usage_error() -> None:
     with pytest.raises(SystemExit) as excinfo:
         launcher_main(["--definitely-not-a-flag"])
     assert excinfo.value.code == 2
+
+
+def test_launcher_prebinds_loopback_and_cleans_runtime_on_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ARXIV_FILTER_DATA_DIR", str(tmp_path))
+    captured: dict[str, object] = {}
+
+    async def fake_serve(listener, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        captured["address"] = listener.getsockname()
+        captured.update(kwargs)
+        kwargs["on_ready"]()
+        record = read_runtime(runtime_path())
+        assert record is not None
+        captured["record"] = record
+
+    monkeypatch.setattr(launcher, "serve_application", fake_serve)
+    args = build_parser().parse_args(["--no-browser", "--port", "0"])
+    assert launcher._run_server(args) == 0
+    assert captured["address"][0] == "127.0.0.1"  # type: ignore[index]
+    assert captured["port"] == captured["address"][1]  # type: ignore[index]
+    assert captured["open_browser"] is False
+    assert len(captured["auth_token"]) == 32  # type: ignore[arg-type]
+    assert len(captured["challenge"]) == 32  # type: ignore[arg-type]
+    assert read_runtime(runtime_path()) is None

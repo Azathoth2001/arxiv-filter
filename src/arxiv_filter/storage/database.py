@@ -41,6 +41,12 @@ MAX_BACKUPS = 3
 #: 备份文件名的前缀。
 BACKUP_PREFIX = "arxiv-filter-"
 
+# Only these tables contain disposable query-cache state. User-owned read state,
+# search history, and schema metadata are deliberately excluded from repair.
+CACHE_TABLES = frozenset({"papers", "query_cache", "query_results"})
+DURABLE_TABLES = frozenset({"schema_meta", "query_history", "read_state"})
+SCHEMA_TABLES = CACHE_TABLES | DURABLE_TABLES
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -283,6 +289,22 @@ class Database:
                         else self._last_backup
                     )
                     logger.error("数据库迁移失败，已回退到只读模式：%s", exc.message_zh)
+
+            if not self._read_only:
+                try:
+                    self._validate_schema_sync(connection)
+                except ArxivFilterError as exc:
+                    # Schema repair/validation follows the same safe startup
+                    # contract as migrations: keep the connection available for
+                    # reads, but refuse writes when compatibility is uncertain.
+                    self._read_only = True
+                    self._migration_error = exc
+                    self._last_backup = (
+                        Path(exc.details["backup"])
+                        if exc.details.get("backup")
+                        else self._last_backup
+                    )
+                    logger.error("数据库结构不兼容，已回退到只读模式：%s", exc.message_zh)
         except Exception:
             connection.close()
             raise
@@ -399,6 +421,175 @@ class Database:
         if backup is not None:
             self._prune_backups_sync()
         return version
+
+    def _validate_schema_sync(self, connection: sqlite3.Connection) -> None:
+        """Compare core tables with the schema implied by applied migrations.
+
+        A cache-only mismatch can be recovered because all cache content is
+        disposable. Durable-table mismatches are never auto-repaired.
+        """
+        try:
+            expected = self._expected_schema_objects()
+            actual = self._core_schema_objects(connection)
+        except Exception as exc:
+            raise ArxivFilterError(
+                ErrorCode.DATABASE_MIGRATION_FAILED,
+                details={"reason": "schema_validation_failed", "detail": type(exc).__name__},
+                message_zh="无法确认数据库结构是否兼容；为保护数据，数据库已按只读方式启动。",
+            ) from exc
+
+        expected_durable = self._schema_subset(expected, DURABLE_TABLES)
+        actual_durable = self._schema_subset(actual, DURABLE_TABLES)
+        if not self._schemas_equal(expected_durable, actual_durable):
+            raise ArxivFilterError(
+                ErrorCode.DATABASE_MIGRATION_FAILED,
+                details={"reason": "durable_schema_incompatible"},
+                message_zh=(
+                    "已读状态、搜索历史或版本记录的数据库结构与当前程序不兼容；"
+                    "为避免丢失数据，数据库已按只读方式启动。"
+                ),
+            )
+
+        expected_cache = self._schema_subset(expected, CACHE_TABLES)
+        actual_cache = self._schema_subset(actual, CACHE_TABLES)
+        if self._schemas_equal(expected_cache, actual_cache):
+            return
+
+        # Back up before touching any disposable cache data. A failed backup
+        # aborts repair, leaving the existing database untouched.
+        backup = self._backup_sync(connection)
+        self._last_backup = backup
+        try:
+            self._rebuild_cache_schema_sync(connection, expected_cache)
+        except Exception as exc:
+            if isinstance(exc, ArxivFilterError):
+                details = dict(exc.details)
+                details.setdefault("backup", str(backup))
+            else:
+                details = {"reason": "cache_schema_rebuild_failed", "detail": type(exc).__name__}
+                details["backup"] = str(backup)
+            raise ArxivFilterError(
+                ErrorCode.DATABASE_MIGRATION_FAILED,
+                details=details,
+                message_zh=(
+                    "缓存结构重建失败，原数据库已回滚并保留备份；"
+                    "数据库已按只读方式启动。"
+                ),
+            ) from exc
+
+        logger.warning("检测到缓存 schema 不兼容，已在备份后重建缓存表：%s", backup)
+        self._prune_backups_sync()
+
+    def _expected_schema_objects(self) -> dict[tuple[str, str, str], str]:
+        """Build the canonical schema in memory by replaying migrations."""
+        expected = sqlite3.connect(":memory:", isolation_level=None)
+        try:
+            version = 0
+            migrations = discover_migrations(self.migrations_dir)
+            for target, script in migrations:
+                if target > self.target_version:
+                    break
+                expected.execute("BEGIN IMMEDIATE")
+                try:
+                    for statement in iter_statements(script.read_text(encoding="utf-8")):
+                        expected.execute(statement)
+                    if version == 0:
+                        expected.execute("INSERT INTO schema_meta(version) VALUES (?)", (target,))
+                    else:
+                        expected.execute("UPDATE schema_meta SET version = ?", (target,))
+                    expected.execute("COMMIT")
+                except Exception:
+                    expected.execute("ROLLBACK")
+                    raise
+                version = target
+
+            if version != self.target_version:
+                raise ValueError("canonical migration set does not reach target version")
+            return self._core_schema_objects(expected)
+        finally:
+            expected.close()
+
+    @staticmethod
+    def _core_schema_objects(
+        connection: sqlite3.Connection,
+    ) -> dict[tuple[str, str, str], str]:
+        rows = connection.execute(
+            """SELECT type, name, tbl_name, sql
+               FROM sqlite_master
+               WHERE type IN ('table', 'index', 'trigger')
+                 AND name NOT LIKE 'sqlite_%'
+                 AND sql IS NOT NULL"""
+        ).fetchall()
+        result: dict[tuple[str, str, str], str] = {}
+        for row in rows:
+            object_type, name, table_name, sql = row
+            if name in SCHEMA_TABLES or table_name in SCHEMA_TABLES:
+                result[(str(object_type), str(name), str(table_name))] = str(sql)
+        return result
+
+    @staticmethod
+    def _schema_subset(
+        objects: dict[tuple[str, str, str], str], tables: frozenset[str]
+    ) -> dict[tuple[str, str, str], str]:
+        return {
+            key: sql
+            for key, sql in objects.items()
+            if key[1] in tables or key[2] in tables
+        }
+
+    @staticmethod
+    def _schemas_equal(
+        left: dict[tuple[str, str, str], str],
+        right: dict[tuple[str, str, str], str],
+    ) -> bool:
+        if left.keys() != right.keys():
+            return False
+        return all(
+            " ".join(left[key].split()) == " ".join(right[key].split())
+            for key in left
+        )
+
+    @staticmethod
+    def _rebuild_cache_schema_sync(
+        connection: sqlite3.Connection,
+        expected_cache: dict[tuple[str, str, str], str],
+    ) -> None:
+        """Replace only disposable cache tables, atomically and FK-safely."""
+        expected_tables = {
+            key: sql for key, sql in expected_cache.items() if key[0] == "table"
+        }
+        expected_auxiliary = {
+            key: sql for key, sql in expected_cache.items() if key[0] != "table"
+        }
+        if {key[1] for key in expected_tables} != CACHE_TABLES:
+            raise ValueError("canonical cache table set is incomplete")
+
+        # SQLite only permits changing foreign_keys outside a transaction. Turn
+        # it off while replacing the parent tables so cascades cannot touch
+        # durable rows; verify constraints before committing the rebuilt schema.
+        connection.execute("PRAGMA foreign_keys = OFF")
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for name in ("query_results", "query_cache", "papers"):
+                quoted = '"' + name.replace('"', '""') + '"'
+                connection.execute(f"DROP TABLE IF EXISTS {quoted}")
+
+            table_order = {"papers": 0, "query_cache": 1, "query_results": 2}
+            for key, sql in sorted(expected_tables.items(), key=lambda item: table_order[item[0][1]]):
+                connection.execute(sql)
+            for sql in expected_auxiliary.values():
+                connection.execute(sql)
+
+            violation = connection.execute("PRAGMA foreign_key_check").fetchone()
+            if violation is not None:
+                raise sqlite3.IntegrityError("rebuilt cache violates foreign-key constraints")
+            connection.execute("COMMIT")
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.execute("PRAGMA foreign_keys = ON")
 
     def _backup_sync(self, connection: sqlite3.Connection) -> Path:
         """写一份时间戳备份并验证它能被重新打开。"""

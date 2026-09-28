@@ -9,6 +9,10 @@ pytest-cov>=6,<7
 respx>=0.21,<1
 pip-tools>=7.4,<8
 
+# tests/unit/test_spec_common.py 读 PE 导入表，验证打包 spec 收集的 Conda 侧
+# DLL 没有被 PATH 上的外来构建顶替（2026-09-27 的 _ssl / _ctypes 故障）。
+pefile>=2024.8.26
+
 # 打包与 E2E 只在需要时安装（方案 §7.1：Playwright 只放开发依赖）
 # pyinstaller>=6,<7
 # playwright>=1.48,<2

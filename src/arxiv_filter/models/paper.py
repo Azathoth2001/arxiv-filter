@@ -139,8 +139,8 @@ class Paper(DomainModel):
 class PaperView(Paper):
     """``Paper`` + 当前用户的阅读状态与本次查询上下文（方案 §4.1、§4.5）。
 
-    ``is_new`` / ``is_read`` 由 :mod:`arxiv_filter.services.search_service`
-    按 **job 开始时的 read_state 快照** 计算，不随滚动变化。
+    ``is_new`` / ``is_read`` 由阶段 4 的 JobManager 按 **job 开始时的
+    read-state 快照** 计算，不随滚动变化。
     """
 
     first_seen_at: UtcDatetime | None = None

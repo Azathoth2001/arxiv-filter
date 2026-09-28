@@ -5,7 +5,7 @@
 1. 调用 :func:`multiprocessing.freeze_support`，让 PyInstaller onefile 不重复拉起进程；
 2. 把参数交给 :mod:`arxiv_filter.launcher`。
 
-真正的 Launcher（单实例、端口、健康检查、开浏览器）是 T4.3 的交付物。
+完整 Launcher（单实例、端口、健康检查、开浏览器）由 ``launcher`` 提供。
 """
 
 from __future__ import annotations

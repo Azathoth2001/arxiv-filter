@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f7f8" />
+    <title>arXiv Filter · 本地文献收件箱</title>
+    <!-- 声明 favicon，避免浏览器去请求不存在的 /favicon.ico（控制台 404 噪音） -->
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/vendor/katex/katex.min.css" />
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <!-- KaTeX 用上游 UMD 形式加载：经典脚本先执行并挂到 window.katex，
+         math-render.js 再从全局读取。理由见该模块头部注释。 -->
+    <script src="/static/vendor/katex/katex.min.js"></script>
+    <script type="module" src="/static/js/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="arXiv Filter 首页">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="brand-name">arXiv <strong>Filter</strong></span>
+      </a>
+      <div class="topbar-right">
+        <span class="local-badge"><span class="status-dot"></span>仅在此设备运行</span>
+        <span id="connection-status" class="connection-status" role="status">正在连接…</span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="welcome-row" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">PERSONAL RESEARCH INBOX</p>
+          <h1 id="page-title">把新论文，筛成你的阅读清单。</h1>
+          <p class="welcome-copy">组合分类、UTC 提交日期与关键词。结果、历史和已读状态都保存在本机。</p>
+        </div>
+        <nav class="quick-actions" aria-label="辅助功能">
+          <button id="history-open" class="button button-quiet" type="button">查询历史</button>
+          <button id="logs-open" class="button button-quiet" type="button">诊断日志</button>
+          <button id="settings-open" class="button button-quiet" type="button">设置</button>
+          <button id="app-exit" class="button button-quiet" type="button">退出</button>
+        </nav>
+      </section>
+
+      <section class="panel query-panel" aria-labelledby="query-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">01 · DEFINE YOUR SEARCH</p>
+            <h2 id="query-title">搜索条件</h2>
+          </div>
+          <button id="query-reset" class="text-button" type="button">重置条件</button>
+        </div>
+
+        <form id="search-form" novalidate>
+          <div class="form-row category-row">
+            <label class="field">
+              <span class="field-label">一级分类</span>
+              <select id="group-id" name="group_id" required aria-describedby="category-hint"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">二级分类 <span class="optional-label">可选</span></span>
+              <select id="category-id" name="category_id" aria-describedby="category-hint"></select>
+            </label>
+            <p id="category-hint" class="field-help category-help">不选二级分类时，搜索该一级分类下的全部子类。</p>
+          </div>
+
+          <div class="form-row date-row">
+            <label class="field">
+              <span class="field-label">起始日期 <span class="optional-label">UTC</span></span>
+              <input id="start-date" name="start_date" type="date" required />
+            </label>
+            <span class="date-join" aria-hidden="true">至</span>
+            <label class="field">
+              <span class="field-label">截止日期 <span class="optional-label">UTC</span></span>
+              <input id="end-date" name="end_date" type="date" required />
+            </label>
+            <div class="date-presets" role="group" aria-label="日期快捷范围">
+              <button class="chip-button" type="button" data-preset="3" aria-pressed="false">3 天</button>
+              <button class="chip-button" type="button" data-preset="7" aria-pressed="false">7 天</button>
+              <button class="chip-button" type="button" data-preset="30" aria-pressed="false">30 天</button>
+              <button class="chip-button" type="button" data-preset="month" aria-pressed="false">本月</button>
+            </div>
+          </div>
+
+          <div class="form-row keyword-row">
+            <label class="field keyword-field">
+              <span class="field-label">关键词 <span class="optional-label">支持短语与 AND / OR / NOT</span></span>
+              <input id="keywords" name="keywords" type="text" maxlength="500" placeholder="例如：\"large language model\" AND retrieval NOT survey" autocomplete="off" />
+            </label>
+            <label class="field scope-field">
+              <span class="field-label">搜索范围</span>
+              <select id="scope" name="scope">
+                <option value="all">全部字段</option>
+                <option value="title">仅标题</option>
+                <option value="abstract">仅摘要</option>
+                <option value="author">仅作者</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="form-error" class="inline-error" role="alert" hidden></div>
+
+          <div class="form-footer">
+            <div class="form-options">
+              <label class="field compact-field">
+                <span class="field-label">排序</span>
+                <select id="sort" name="sort">
+                  <option value="submitted_desc">提交时间倒序</option>
+                  <option value="relevance">相关度</option>
+                  <option value="updated_desc">更新时间倒序</option>
+                </select>
+              </label>
+              <label class="field compact-field cap-field">
+                <span class="field-label">结果上限</span>
+                <input id="result-cap" name="result_cap" type="number" min="1" max="2000" step="1" value="2000" />
+              </label>
+            </div>
+            <div class="form-actions">
+              <button id="cancel-search" class="button button-secondary" type="button" hidden>取消查询</button>
+              <button id="search-submit" class="button button-primary" type="submit">
+                <span class="button-icon" aria-hidden="true">⌕</span>开始筛选
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <section id="job-status" class="job-status" aria-live="polite" hidden>
+          <div class="job-status-top">
+            <span id="job-status-label" class="job-status-label">准备查询</span>
+            <span id="job-progress-label" class="job-progress-label">等待首个数据页</span>
+          </div>
+          <progress id="job-progress" max="100" value="0" aria-label="查询进度" hidden></progress>
+          <div id="job-error" class="inline-error job-error" role="alert" hidden></div>
+          <div id="stale-confirmation" class="stale-banner" hidden>
+            <div><strong>找到一份过期缓存</strong><span id="stale-description"></span></div>
+            <button id="use-stale" class="button button-secondary" type="button">确认使用</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="results-section" aria-labelledby="results-title">
+        <div class="results-heading">
+          <div>
+            <p class="eyebrow">02 · YOUR READING LIST</p>
+            <div class="results-title-line">
+              <h2 id="results-title">筛选结果</h2>
+              <span id="result-count" class="count-badge">尚未查询</span>
+            </div>
+            <p id="results-note" class="results-note">结果会按提交时间排序，浏览不会自动标记为已读。</p>
+          </div>
+          <div class="results-tools">
+            <label class="filter-control">
+              <span class="visually-hidden">筛选结果</span>
+              <select id="read-filter" aria-label="筛选阅读状态">
+                <option value="all">全部论文</option>
+                <option value="new">只看新增</option>
+                <option value="unread">只看未读</option>
+              </select>
+            </label>
+            <button id="continue-search" class="button button-secondary" type="button" hidden>继续获取</button>
+            <button id="export-open" class="button button-primary" type="button" disabled>导出</button>
+          </div>
+        </div>
+
+        <div id="previous-results-note" class="previous-results-note" hidden>正在查询新条件；下方仍是上一次的结果。</div>
+        <div id="empty-state" class="empty-state">
+          <span class="empty-mark" aria-hidden="true">↗</span>
+          <h3>从一个小范围开始</h3>
+          <p>选择分类和日期后即可筛选。空关键词表示只按分类与日期查询。</p>
+        </div>
+        <div id="results-list" class="results-list" aria-live="polite"></div>
+        <nav id="pagination" class="pagination" aria-label="结果分页" hidden>
+          <button id="page-prev" class="button button-quiet" type="button">上一页</button>
+          <span id="page-label"></span>
+          <button id="page-next" class="button button-quiet" type="button">下一页</button>
+        </nav>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>本地运行 · 数据保存在此设备</span>
+      <span>Thank you to arXiv for use of its open access interoperability.</span>
+      <button id="about-open" class="footer-link" type="button" aria-haspopup="dialog">关于与声明</button>
+    </footer>
+
+    <dialog id="about-dialog" class="dialog-card" aria-labelledby="about-title">
+      <div class="dialog-heading"><div><p class="eyebrow">ABOUT THIS APP</p><h2 id="about-title">关于 arXiv Filter</h2></div><button class="icon-button" data-close-dialog="about-dialog" aria-label="关闭">×</button></div>
+      <p class="about-notice">本工具不是 arXiv 官方产品，也不代表 arXiv 的立场。</p>
+      <p class="about-copy">arXiv Filter 是一个本地运行的文献筛选工具。查询条件会发送到 arXiv 公开 API；查询历史、论文缓存和已读状态保存在此设备。</p>
+      <p class="about-copy">Thank you to arXiv for use of its open access interoperability.</p>
+      <div class="dialog-actions"><button class="button button-primary" data-close-dialog="about-dialog" type="button">知道了</button></div>
+    </dialog>
+
+    <dialog id="export-dialog" class="dialog-card">
+      <form method="dialog" id="export-form">
+        <div class="dialog-heading"><div><p class="eyebrow">DOWNLOAD</p><h2>导出当前结果</h2></div><button class="icon-button" value="cancel" aria-label="关闭">×</button></div>
+        <p class="dialog-copy">导出当前筛选条件下的全部结果，不只导出当前页。</p>
+        <label class="field"><span class="field-label">文件格式</span>
+          <select id="export-format" name="format">
+            <option value="csv">CSV · Excel 兼容</option>
+            <option value="xlsx">Excel 工作簿</option>
+            <option value="json">JSON · 完整元数据</option>
+            <option value="markdown">Markdown · 阅读笔记</option>
+            <option value="bibtex">BibTeX · 文献引用</option>
+          </select>
+        </label>
+        <label class="check-row"><input id="export-state" type="checkbox" checked /><span>包含新增 / 已读状态</span></label>
+        <label id="confirm-partial-row" class="check-row warning-check" hidden><input id="confirm-partial" type="checkbox" /><span>我知道这是未完成的部分结果，仍要导出</span></label>
+        <div id="export-error" class="inline-error" role="alert" hidden></div>
+        <div class="dialog-actions"><button class="button button-quiet" value="cancel">取消</button><button id="export-submit" class="button button-primary" type="button">下载文件</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="history-dialog" class="dialog-card wide-dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">RECENT SEARCHES</p><h2>查询历史</h2></div><button class="icon-button" data-close-dialog="history-dialog" aria-label="关闭">×</button></div>
+      <div id="history-list" class="dialog-list"></div>
+    </dialog>
+
+    <dialog id="logs-dialog" class="dialog-card wide-dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">LOCAL DIAGNOSTICS</p><h2>诊断日志</h2></div><button class="icon-button" data-close-dialog="logs-dialog" aria-label="关闭">×</button></div>
+      <p class="dialog-copy">日志内容已脱敏；复制诊断信息时不会包含会话令牌。</p>
+      <div id="logs-list" class="dialog-list"></div>
+      <div class="dialog-actions"><button id="logs-copy" class="button button-secondary" type="button">复制诊断</button></div>
+    </dialog>
+
+    <dialog id="settings-dialog" class="dialog-card">
+      <div class="dialog-heading"><div><p class="eyebrow">PREFERENCES</p><h2>设置</h2></div><button class="icon-button" data-close-dialog="settings-dialog" aria-label="关闭">×</button></div>
+      <p class="dialog-copy">偏好设置保存在本机。代理密码不会回显到界面或日志。</p>
+      <label class="field"><span class="field-label">网络代理</span>
+        <select id="proxy-mode"><option value="system">使用系统代理</option><option value="none">不使用代理</option><option value="custom">自定义代理</option></select>
+      </label>
+      <label id="proxy-url-row" class="field" hidden><span class="field-label">代理地址</span><input id="proxy-url" type="password" autocomplete="new-password" placeholder="http://用户名:密码@主机:端口" /></label>
+      <label class="check-row"><input id="open-marks-read" type="checkbox" /><span>打开论文页面时自动标记为已读</span></label>
+      <div id="settings-error" class="inline-error" role="alert" hidden></div>
+      <div class="dialog-actions"><button id="cache-clear" class="button button-quiet danger-text" type="button">清理缓存</button><button id="settings-save" class="button button-primary" type="button">保存设置</button></div>
+    </dialog>
+
+    <dialog id="confirm-dialog" class="dialog-card confirm-dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">CONFIRMATION</p><h2 id="confirm-title">请确认</h2></div><button class="icon-button" data-close-dialog="confirm-dialog" aria-label="关闭">×</button></div>
+      <p id="confirm-copy" class="dialog-copy"></p>
+      <div class="dialog-actions"><button id="confirm-cancel" class="button button-quiet" type="button">返回</button><button id="confirm-accept" class="button button-primary" type="button">确认</button></div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>

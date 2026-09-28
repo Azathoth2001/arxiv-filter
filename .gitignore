@@ -56,3 +56,14 @@ config.json
 
 # 生成的候选分类快照（每次 update_categories.py 重新生成，不入库）
 src/arxiv_filter/data/categories.candidate.json
+
+# 发布准备期的本地草稿：上传清单与一次性脚本，不属于项目内容
+_upload_manifest.md
+_*.mjs
+_*.py
+
+# 应用图标美术资源：不随仓库分发。
+# 本地构建需要带图标时，用环境变量指向仓库外的文件：
+#   $env:ARXIV_FILTER_ICON = 'D:\path\to\artwork.ico'
+# 详见 packaging/spec_common.py 的 optional_icon()
+packaging/*.ico

@@ -33,6 +33,8 @@ class ErrorCode(StrEnum):
 
     # —— 本地输入 ——
     INVALID_SEARCH_REQUEST = "INVALID_SEARCH_REQUEST"
+    INVALID_ARXIV_ID = "INVALID_ARXIV_ID"
+    PAPER_NOT_IN_JOB = "PAPER_NOT_IN_JOB"
     INVALID_KEYWORD_SYNTAX = "INVALID_KEYWORD_SYNTAX"
     UNKNOWN_CATEGORY = "UNKNOWN_CATEGORY"
     RESULT_CAP_INVALID = "RESULT_CAP_INVALID"
@@ -40,12 +42,16 @@ class ErrorCode(StrEnum):
     # —— taxonomy / 配置 ——
     TAXONOMY_CORRUPT = "TAXONOMY_CORRUPT"
     CONFIG_CORRUPT = "CONFIG_CORRUPT"
+    SETTINGS_UPDATE_FAILED = "SETTINGS_UPDATE_FAILED"
 
     # —— 任务 ——
     JOB_NOT_FOUND = "JOB_NOT_FOUND"
     JOB_NOT_FINISHED = "JOB_NOT_FINISHED"
     JOB_ALREADY_FINISHED = "JOB_ALREADY_FINISHED"
     JOB_LIMIT_REACHED = "JOB_LIMIT_REACHED"
+    JOB_INVALID_TRANSITION = "JOB_INVALID_TRANSITION"
+    API_NOT_FOUND = "API_NOT_FOUND"
+    API_METHOD_NOT_ALLOWED = "API_METHOD_NOT_ALLOWED"
     PAGINATION_STALLED = "PAGINATION_STALLED"
     SEARCH_TIMEOUT = "SEARCH_TIMEOUT"
 
@@ -53,11 +59,14 @@ class ErrorCode(StrEnum):
     CACHE_UNAVAILABLE = "CACHE_UNAVAILABLE"
     DATABASE_MIGRATION_FAILED = "DATABASE_MIGRATION_FAILED"
     DATABASE_TOO_NEW = "DATABASE_TOO_NEW"
+    CACHE_CLEAR_CONFIRMATION_REQUIRED = "CACHE_CLEAR_CONFIRMATION_REQUIRED"
 
     # —— 导出 ——
     EXPORT_FAILED = "EXPORT_FAILED"
+    EXPORT_NOT_AVAILABLE = "EXPORT_NOT_AVAILABLE"
     EXPORT_TARGET_LOCKED = "EXPORT_TARGET_LOCKED"
     EXPORT_INVALID_SUBSET = "EXPORT_INVALID_SUBSET"
+    EXPORT_PARTIAL_CONFIRMATION_REQUIRED = "EXPORT_PARTIAL_CONFIRMATION_REQUIRED"
 
     # —— 系统 / 启动 ——
     INVALID_TOKEN = "INVALID_TOKEN"
@@ -154,6 +163,18 @@ ERROR_SPECS: Mapping[ErrorCode, ErrorSpec] = {
         422,
         retryable=False,
     ),
+    ErrorCode.INVALID_ARXIV_ID: ErrorSpec(
+        "arXiv ID 格式无效，请检查后重试。",
+        "The arXiv identifier is invalid.",
+        422,
+        retryable=False,
+    ),
+    ErrorCode.PAPER_NOT_IN_JOB: ErrorSpec(
+        "所选论文不属于这次查询结果，请刷新列表后重试。",
+        "One or more papers do not belong to this search job.",
+        422,
+        retryable=False,
+    ),
     ErrorCode.INVALID_KEYWORD_SYNTAX: ErrorSpec(
         "关键词表达式有语法错误，请按提示的位置修改。",
         "The keyword expression has a syntax error; see the reported position.",
@@ -184,6 +205,12 @@ ERROR_SPECS: Mapping[ErrorCode, ErrorSpec] = {
         500,
         retryable=False,
     ),
+    ErrorCode.SETTINGS_UPDATE_FAILED: ErrorSpec(
+        "设置未能保存，请检查代理地址后重试。",
+        "The settings could not be saved. Check the proxy address and try again.",
+        422,
+        retryable=False,
+    ),
     ErrorCode.JOB_NOT_FOUND: ErrorSpec(
         "找不到这个任务，可能程序已经重启。",
         "That job was not found; the app may have restarted.",
@@ -207,6 +234,24 @@ ERROR_SPECS: Mapping[ErrorCode, ErrorSpec] = {
         "Only one upstream job may run at a time; wait for the current one to finish.",
         409,
         retryable=True,
+    ),
+    ErrorCode.JOB_INVALID_TRANSITION: ErrorSpec(
+        "任务状态不允许此操作，请刷新任务状态后重试。",
+        "The requested job state transition is not allowed.",
+        409,
+        retryable=False,
+    ),
+    ErrorCode.API_NOT_FOUND: ErrorSpec(
+        "找不到这个 API 路径，请检查地址。",
+        "The API path was not found.",
+        404,
+        retryable=False,
+    ),
+    ErrorCode.API_METHOD_NOT_ALLOWED: ErrorSpec(
+        "这个 API 不支持该请求方法。",
+        "The HTTP method is not allowed for this API path.",
+        405,
+        retryable=False,
     ),
     ErrorCode.PAGINATION_STALLED: ErrorSpec(
         "服务返回的分页数据没有前进，已停止以免重复请求。",
@@ -238,10 +283,22 @@ ERROR_SPECS: Mapping[ErrorCode, ErrorSpec] = {
         500,
         retryable=False,
     ),
+    ErrorCode.CACHE_CLEAR_CONFIRMATION_REQUIRED: ErrorSpec(
+        "清空缓存前请先明确确认，此操作不会删除历史和已读状态。",
+        "Explicit confirmation is required to clear the query cache.",
+        400,
+        retryable=False,
+    ),
     ErrorCode.EXPORT_FAILED: ErrorSpec(
         "无法写入目标文件；请检查文件是否被 Excel 占用。",
         "Could not write the target file; check whether Excel has it open.",
         500,
+        retryable=False,
+    ),
+    ErrorCode.EXPORT_NOT_AVAILABLE: ErrorSpec(
+        "当前版本尚未接入导出模块，文件暂时无法生成。",
+        "The export component is not available in this build.",
+        501,
         retryable=False,
     ),
     ErrorCode.EXPORT_TARGET_LOCKED: ErrorSpec(
@@ -254,6 +311,12 @@ ERROR_SPECS: Mapping[ErrorCode, ErrorSpec] = {
         "导出请求里包含了不属于本次结果的论文。",
         "The export request contained papers outside the current result set.",
         422,
+        retryable=False,
+    ),
+    ErrorCode.EXPORT_PARTIAL_CONFIRMATION_REQUIRED: ErrorSpec(
+        "这是未完成的部分结果；请明确确认后再导出。",
+        "Explicit confirmation is required before exporting partial results.",
+        409,
         retryable=False,
     ),
     ErrorCode.INVALID_TOKEN: ErrorSpec(

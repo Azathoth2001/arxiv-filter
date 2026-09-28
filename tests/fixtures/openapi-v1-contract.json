@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "authenticated_header": "X-App-Token",
+  "operations": [
+    "DELETE /api/v1/cache",
+    "GET /api/v1/categories",
+    "GET /api/v1/history",
+    "GET /api/v1/logs",
+    "GET /api/v1/search-jobs/{job_id}",
+    "GET /api/v1/search-jobs/{job_id}/results",
+    "GET /api/v1/system/health",
+    "GET /api/v1/system/settings",
+    "POST /api/v1/exports",
+    "POST /api/v1/search-jobs",
+    "POST /api/v1/search-jobs/{job_id}/cancel",
+    "POST /api/v1/search-jobs/{job_id}/continue",
+    "POST /api/v1/seen",
+    "POST /api/v1/system/heartbeat",
+    "POST /api/v1/system/shutdown",
+    "PUT /api/v1/read-state/{paper_id}",
+    "PUT /api/v1/system/settings"
+  ],
+  "error_schema_required": [
+    "code",
+    "message_zh",
+    "message_en",
+    "retryable",
+    "request_id",
+    "details"
+  ]
+}

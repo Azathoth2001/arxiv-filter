@@ -205,6 +205,189 @@ async def test_reopening_is_idempotent(tmp_path: Path, migrations_dir: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_incompatible_cache_schema_is_backed_up_and_rebuilt_without_losing_durable_data(
+    tmp_path: Path, migrations_dir: Path
+) -> None:
+    db = make_db(tmp_path, migrations_dir)
+    await db.open()
+
+    def seed(connection: sqlite3.Connection) -> None:
+        connection.execute("INSERT INTO papers VALUES ('2601.00001', '{}', 't')")
+        connection.execute("INSERT INTO query_cache VALUES ('cache-1','{}','t','t',1,1,'t')")
+        connection.execute(
+            "INSERT INTO query_results VALUES ('cache-1', 0, '2601.00001', 1, NULL)"
+        )
+        connection.execute(
+            "INSERT INTO query_history VALUES ('history-1','{}','cache-1','t','t','completed',1,0)"
+        )
+        connection.execute(
+            "INSERT INTO read_state VALUES ('2601.00001','first','last','read')"
+        )
+
+    await db.write(seed)
+    await db.close()
+
+    # Simulate a cache-only schema drift while the recorded DB version remains v1.
+    damaged = sqlite3.connect(db.path)
+    try:
+        damaged.execute("ALTER TABLE papers ADD COLUMN broken TEXT")
+        damaged.execute("ALTER TABLE query_cache ADD COLUMN broken TEXT")
+        damaged.execute("ALTER TABLE query_results ADD COLUMN broken TEXT")
+        damaged.commit()
+    finally:
+        damaged.close()
+
+    repaired = make_db(tmp_path, migrations_dir)
+    await repaired.open()
+    try:
+        assert repaired.read_only is False, (
+            repaired.migration_error.details if repaired.migration_error else None,
+            repaired.migration_error.message_zh if repaired.migration_error else None,
+        )
+        assert repaired.migration_error is None
+        assert repaired.last_backup is not None and repaired.last_backup.is_file()
+
+        state = await repaired.read(
+            lambda c: (
+                c.execute("SELECT canonical_id, first_seen_at, last_seen_at, read_at FROM read_state").fetchall(),
+                c.execute("SELECT id, status FROM query_history").fetchall(),
+                c.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0],
+                c.execute("SELECT COUNT(*) FROM query_results").fetchone()[0],
+                c.execute("PRAGMA foreign_keys").fetchone()[0],
+            )
+        )
+        read_rows, history_rows, cache_count, result_count, foreign_keys = state
+        assert [tuple(row) for row in read_rows] == [("2601.00001", "first", "last", "read")]
+        assert [tuple(row) for row in history_rows] == [("history-1", "completed")]
+        assert cache_count == result_count == 0
+        assert foreign_keys == 1
+
+        backup = sqlite3.connect(repaired.last_backup)
+        try:
+            assert backup.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert backup.execute("SELECT COUNT(*) FROM query_cache").fetchone()[0] == 1
+            assert backup.execute("SELECT id FROM query_history").fetchone()[0] == "history-1"
+            assert backup.execute("SELECT read_at FROM read_state").fetchone()[0] == "read"
+        finally:
+            backup.close()
+    finally:
+        await repaired.close()
+
+
+@pytest.mark.asyncio
+async def test_incompatible_durable_schema_starts_read_only_without_rebuilding_cache(
+    tmp_path: Path, migrations_dir: Path
+) -> None:
+    db = make_db(tmp_path, migrations_dir)
+    await db.open()
+
+    def seed(connection: sqlite3.Connection) -> None:
+        connection.execute("INSERT INTO papers VALUES ('2601.00002', '{}', 't')")
+        connection.execute("INSERT INTO query_cache VALUES ('cache-2','{}','t','t',1,1,'t')")
+        connection.execute(
+            "INSERT INTO query_results VALUES ('cache-2', 0, '2601.00002', 1, NULL)"
+        )
+        connection.execute(
+            "INSERT INTO query_history VALUES ('history-2','{}','cache-2','t','t','completed',1,0)"
+        )
+        connection.execute("INSERT INTO read_state VALUES ('2601.00002','first','last','read')")
+
+    await db.write(seed)
+    await db.close()
+
+    damaged = sqlite3.connect(db.path)
+    try:
+        damaged.execute("ALTER TABLE query_history ADD COLUMN incompatible TEXT")
+        damaged.commit()
+    finally:
+        damaged.close()
+
+    reopened = make_db(tmp_path, migrations_dir)
+    await reopened.open()
+    try:
+        assert reopened.read_only is True
+        assert reopened.migration_error is not None
+        assert reopened.migration_error.details["reason"] == "durable_schema_incompatible"
+        assert reopened.last_backup is None
+        preserved = await reopened.read(
+            lambda c: (
+                c.execute("SELECT cache_key FROM query_cache").fetchall(),
+                c.execute("SELECT id FROM query_history").fetchall(),
+                c.execute("SELECT read_at FROM read_state").fetchall(),
+            )
+        )
+        assert [row[0] for row in preserved[0]] == ["cache-2"]
+        assert [row[0] for row in preserved[1]] == ["history-2"]
+        assert [row[0] for row in preserved[2]] == ["read"]
+    finally:
+        await reopened.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_cache_rebuild_rolls_back_and_keeps_a_verified_backup(
+    tmp_path: Path, migrations_dir: Path
+) -> None:
+    db = make_db(tmp_path, migrations_dir)
+    await db.open()
+
+    def seed(connection: sqlite3.Connection) -> None:
+        connection.execute("INSERT INTO papers VALUES ('pinned-paper', '{}', 't')")
+        connection.execute("INSERT INTO query_cache VALUES ('cache-3','{}','t','t',1,1,'t')")
+        connection.execute(
+            "INSERT INTO query_results VALUES ('cache-3', 0, 'pinned-paper', 1, NULL)"
+        )
+        connection.execute(
+            "INSERT INTO query_history VALUES ('history-3','{}','cache-3','t','t','completed',1,0)"
+        )
+        connection.execute("INSERT INTO read_state VALUES ('pinned-paper','first','last','read')")
+        connection.execute(
+            "CREATE TABLE external_pins (canonical_id TEXT NOT NULL REFERENCES papers(canonical_id))"
+        )
+        connection.execute("INSERT INTO external_pins VALUES ('pinned-paper')")
+
+    await db.write(seed)
+    await db.close()
+
+    damaged = sqlite3.connect(db.path)
+    try:
+        damaged.execute("ALTER TABLE papers ADD COLUMN broken TEXT")
+        damaged.commit()
+    finally:
+        damaged.close()
+
+    reopened = make_db(tmp_path, migrations_dir)
+    await reopened.open()
+    try:
+        assert reopened.read_only is True
+        assert reopened.migration_error is not None
+        assert reopened.migration_error.details["reason"] == "cache_schema_rebuild_failed"
+        assert reopened.last_backup is not None and reopened.last_backup.is_file()
+
+        preserved = await reopened.read(
+            lambda c: (
+                c.execute("SELECT canonical_id FROM papers").fetchall(),
+                c.execute("SELECT cache_key FROM query_cache").fetchall(),
+                c.execute("SELECT canonical_id FROM external_pins").fetchall(),
+                c.execute("PRAGMA foreign_keys").fetchone()[0],
+            )
+        )
+        papers, cache, pins, foreign_keys = preserved
+        assert [row[0] for row in papers] == ["pinned-paper"]
+        assert [row[0] for row in cache] == ["cache-3"]
+        assert [row[0] for row in pins] == ["pinned-paper"]
+        assert foreign_keys == 1
+
+        backup = sqlite3.connect(reopened.last_backup)
+        try:
+            assert backup.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert backup.execute("SELECT cache_key FROM query_cache").fetchone()[0] == "cache-3"
+        finally:
+            backup.close()
+    finally:
+        await reopened.close()
+
+
+@pytest.mark.asyncio
 async def test_missing_migration_for_target_version_is_refused(
     tmp_path: Path, migrations_dir: Path
 ) -> None:
